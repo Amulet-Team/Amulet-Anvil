@@ -25,6 +25,7 @@ if (
 def fix_path(path: str) -> str:
     return os.path.realpath(path).replace(os.sep, "/")
 
+
 cmdclass: dict[str, type[Command]] = versioneer.get_cmdclass()
 
 
