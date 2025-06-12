@@ -5,15 +5,15 @@ import shutil
 import glob
 from concurrent.futures import ThreadPoolExecutor
 from weakref import ref
-from threading import Thread, Condition, Lock
+from threading import Thread, Condition
 import time
 
 from amulet.nbt import NamedTag, CompoundTag, StringTag, ListTag
 
 from amulet.core.chunk import ChunkDoesNotExist
 from amulet.anvil import AnvilRegion, RegionDoesNotExist
-import tests.data.worlds_src
-import tests.data.region
+import amulet.minecraft_worlds
+import test_amulet_anvil.region
 from test_amulet_anvil.test_region_ import (
     throw_region_does_not_exist,
 )
@@ -183,7 +183,7 @@ class AnvilRegionTestCase(unittest.TestCase):
     def test_compression(self) -> None:
         with TemporaryDirectory() as tempdir:
             shutil.rmtree(tempdir)
-            shutil.copytree(tests.data.region.__path__[0], tempdir)
+            shutil.copytree(test_amulet_anvil.region.__path__[0], tempdir)
             zlib_region = AnvilRegion(os.path.join(tempdir, "zlib"), 5, 5)
             lz4_region = AnvilRegion(os.path.join(tempdir, "lz4"), 5, 5)
             try:
@@ -231,7 +231,7 @@ class AnvilRegionTestCase(unittest.TestCase):
         with TemporaryDirectory() as tempdir:
             # Create a temporary directory and copy all Java worlds to it.
             shutil.copytree(
-                os.path.join(tests.data.worlds_src.__path__[0], "java"),
+                os.path.join(amulet.minecraft_worlds.worlds_src.__path__[0], "java"),
                 os.path.join(tempdir, "java"),
             )
 
