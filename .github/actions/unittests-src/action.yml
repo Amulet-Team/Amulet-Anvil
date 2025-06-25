@@ -15,16 +15,10 @@ runs:
           exit 1
         fi 
 
-    - name: Set up Python ${{ inputs.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-
-    - name: Install dependencies
-      shell: bash
-      run: |
-        pip cache purge
-        python -m pip install --upgrade pip
 
     - name: Build
       shell: bash

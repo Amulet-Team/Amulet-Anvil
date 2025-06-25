@@ -23,8 +23,6 @@ jobs:
     steps:
     - name: Clone
       uses: actions/checkout@v4
-      with:
-        submodules: 'true'
 
     - name: Install dependencies
       uses: ./.github/actions/install-dependencies
@@ -32,10 +30,10 @@ jobs:
         python-version: ${{ matrix.python-version }}
         username: ${{ secrets.PYPI_USERNAME }}
         compiler-version-password: ${{ secrets.AMULET_COMPILER_VERSION_PYPI_PASSWORD }}
+        utils-password: ${{ secrets.AMULET_UTILS_PYPI_PASSWORD }}
         zlib-password: ${{ secrets.AMULET_ZLIB_PYPI_PASSWORD }}
         nbt-password: ${{ secrets.AMULET_NBT_PYPI_PASSWORD }}
         core-password: ${{ secrets.AMULET_CORE_PYPI_PASSWORD }}
-        utils-password: ${{ secrets.AMULET_UTILS_PYPI_PASSWORD }}
         rest-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build SDist

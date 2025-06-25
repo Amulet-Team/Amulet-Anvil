@@ -1,6 +1,7 @@
 if (NOT TARGET amulet_anvil)
     message(STATUS "Finding amulet_anvil")
 
+    find_package(amulet_io CONFIG REQUIRED)
     find_package(amulet_nbt CONFIG REQUIRED)
     find_package(amulet_core CONFIG REQUIRED)
     find_package(amulet_utils CONFIG REQUIRED)
@@ -15,6 +16,7 @@ if (NOT TARGET amulet_anvil)
     )
 
     add_library(amulet_anvil INTERFACE)
+    target_link_libraries(amulet_anvil INTERFACE amulet_io)
     target_link_libraries(amulet_anvil INTERFACE amulet_nbt)
     target_link_libraries(amulet_anvil INTERFACE amulet_core)
     target_link_libraries(amulet_anvil INTERFACE amulet_utils)

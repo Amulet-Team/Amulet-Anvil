@@ -209,22 +209,3 @@ def find_and_save_compatible_libraries(
         os.path.join(os.path.dirname(__file__), "libraries.json"), "w", encoding="utf-8"
     ) as f:
         json.dump({name: str(specifier) for name, specifier in libraries.items()}, f)
-
-
-if __name__ == "__main__":
-    find_and_save_compatible_libraries(
-        [
-            ("amulet-game", "Amulet-Team/Amulet-Game"),
-            ("amulet-core", "Amulet-Team/Amulet-Core"),
-            ("amulet-nbt", "Amulet-Team/Amulet-NBT"),
-            ("amulet-zlib", "Amulet-Team/Amulet-zlib"),
-        ],
-        [
-            f"amulet-compiler-target==1.0",
-            f"amulet-io~=1.0",
-            f"amulet-compiler-version==3.0.0",
-            f"amulet-nbt~=5.0.0.0a0",
-            f"amulet-core~=2.0.2.0a0",
-            f"amulet-game~=1.0.0.0a0",
-        ],
-    )
