@@ -31,7 +31,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(lz4)
 set(LZ4_BUILD_CLI OFF)
-add_subdirectory(${lz4_SOURCE_DIR}/build/cmake)
+add_subdirectory(${lz4_SOURCE_DIR}/build/cmake ${CMAKE_BINARY_DIR}/lz4)
 
 
 # Find libraries
