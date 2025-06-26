@@ -31,17 +31,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(lz4)
 set(LZ4_BUILD_CLI OFF)
-add_subdirectory(${lz4_SOURCE_DIR}/build/cmake)
+add_subdirectory(${lz4_SOURCE_DIR}/build/cmake ${CMAKE_BINARY_DIR}/lz4)
 
-# Add pybind11
+
+# Find libraries
 find_package(pybind11 CONFIG REQUIRED)
-
-# Add Amulet libraries
 find_package(amulet_pybind11_extensions CONFIG REQUIRED)
-find_package(amulet_nbt CONFIG REQUIRED)
-find_package(amulet_core CONFIG REQUIRED)
+find_package(amulet_io CONFIG REQUIRED)
 find_package(amulet_utils CONFIG REQUIRED)
 find_package(amulet_zlib CONFIG REQUIRED)
+find_package(amulet_nbt CONFIG REQUIRED)
+find_package(amulet_core CONFIG REQUIRED)
 
 # Find C++ files
 file(REAL_PATH src SOURCE_PATH)
@@ -55,11 +55,12 @@ list(REMOVE_ITEM HEADERS ${EXTENSION_HEADERS})
 # Add implementation
 add_library(amulet_anvil SHARED)
 target_compile_definitions(amulet_anvil PRIVATE ExportAmuletAnvil)
-target_link_libraries( amulet_anvil PRIVATE lz4_static )
-target_link_libraries( amulet_anvil PRIVATE amulet_zlib )
-target_link_libraries( amulet_anvil PUBLIC amulet_nbt )
-target_link_libraries( amulet_anvil PUBLIC amulet_core )
-target_link_libraries( amulet_anvil PUBLIC amulet_utils )
+target_link_libraries(amulet_anvil PRIVATE lz4_static)
+target_link_libraries(amulet_anvil PUBLIC amulet_io)
+target_link_libraries(amulet_anvil PUBLIC amulet_utils)
+target_link_libraries(amulet_anvil PRIVATE amulet_zlib)
+target_link_libraries(amulet_anvil PUBLIC amulet_nbt)
+target_link_libraries(amulet_anvil PUBLIC amulet_core)
 target_include_directories(amulet_anvil PUBLIC ${SOURCE_PATH})
 target_sources(amulet_anvil PRIVATE ${SOURCES} ${HEADERS})
 foreach(FILE ${SOURCES} ${HEADERS})
@@ -71,8 +72,8 @@ endforeach()
 
 # Add python extension
 pybind11_add_module(_amulet_anvil)
-target_link_libraries( _amulet_anvil PRIVATE amulet_pybind11_extensions )
-target_link_libraries( _amulet_anvil PRIVATE amulet_anvil )
+target_link_libraries(_amulet_anvil PRIVATE amulet_pybind11_extensions)
+target_link_libraries(_amulet_anvil PRIVATE amulet_anvil)
 target_compile_definitions(_amulet_anvil PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
 target_compile_definitions(_amulet_anvil PRIVATE PYBIND11_VERSION="${pybind11_VERSION}")
 target_compile_definitions(_amulet_anvil PRIVATE COMPILER_ID="${CMAKE_CXX_COMPILER_ID}")

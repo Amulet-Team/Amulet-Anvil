@@ -204,10 +204,10 @@ def main() -> None:
     # print("Running stubgen...")
     # stubgen.main([
     #     *glob.glob(
-    #         os.path.join(glob.escape(amulet_path), "**", "*.py"), recursive=True
+    #         os.path.join(glob.escape(package_path), "**", "*.py"), recursive=True
     #     ),
     #     "-o",
-    #     amulet_path,
+    #     package_path,
     #     "--include-docstrings",
     # ])
 
