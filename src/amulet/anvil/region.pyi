@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc
 import typing
 
 import amulet.nbt
@@ -24,14 +25,25 @@ class AnvilRegion:
 
     @typing.overload
     def __init__(
-        self, directory: str, file_name: str, rx: int, rz: int, mcc: bool = False
+        self,
+        directory: str,
+        file_name: str,
+        rx: typing.SupportsInt,
+        rz: typing.SupportsInt,
+        mcc: bool = False,
     ) -> None:
         """
         Construct from the directory path, name of the file and region coordinates.
         """
 
     @typing.overload
-    def __init__(self, directory: str, rx: int, rz: int, mcc: bool = False) -> None:
+    def __init__(
+        self,
+        directory: str,
+        rx: typing.SupportsInt,
+        rz: typing.SupportsInt,
+        mcc: bool = False,
+    ) -> None:
         """
         Construct from the directory path and region coordinates.
         File name is computed from region coordinates.
@@ -60,7 +72,7 @@ class AnvilRegion:
         External ReadWrite:SharedReadWrite lock required.
         """
 
-    def contains(self, cx: int, cz: int) -> bool:
+    def contains(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
         """
         Is the coordinate in the region.
         This returns true even if there is no value for the coordinate.
@@ -68,14 +80,17 @@ class AnvilRegion:
         Thread safe.
         """
 
-    def delete_batch(self, coords: list[tuple[int, int]]) -> None:
+    def delete_batch(
+        self,
+        coords: collections.abc.Sequence[tuple[typing.SupportsInt, typing.SupportsInt]],
+    ) -> None:
         """
         Delete multiple chunk's data.
         Coordinates are in world space.
         External ReadWrite:SharedReadWrite lock required.
         """
 
-    def delete_value(self, cx: int, cz: int) -> None:
+    def delete_value(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> None:
         """
         Delete the chunk data.
         Coordinates are in world space.
@@ -107,14 +122,16 @@ class AnvilRegion:
         Thread safe.
         """
 
-    def get_value(self, cx: int, cz: int) -> amulet.nbt.NamedTag:
+    def get_value(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt
+    ) -> amulet.nbt.NamedTag:
         """
         Get the value for this coordinate.
         Coordinates are in world space.
         External Read:SharedReadWrite lock required.
         """
 
-    def has_value(self, cx: int, cz: int) -> bool:
+    def has_value(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
         """
         Is there a value stored for this coordinate.
         Coordinates are in world space.
@@ -129,7 +146,9 @@ class AnvilRegion:
         External Read:SharedReadWrite lock required.
         """
 
-    def set_value(self, cx: int, cz: int, tag: amulet.nbt.NamedTag) -> None:
+    def set_value(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt, tag: amulet.nbt.NamedTag
+    ) -> None:
         """
         Set the value for this coordinate.
         Coordinates are in world space.

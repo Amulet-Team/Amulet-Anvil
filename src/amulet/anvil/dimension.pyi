@@ -21,7 +21,7 @@ class AnvilDimension:
         layer_names: collections.abc.Iterable[str],
         mcc: bool = False,
     ) -> None: ...
-    def all_chunk_coords(self) -> typing.Iterator[tuple[int, int]]:
+    def all_chunk_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         Get an iterator for all the chunks that exist in this dimension.
         External Read::SharedReadWrite lock required.
@@ -34,7 +34,7 @@ class AnvilDimension:
         External ReadWrite::SharedReadOnly lock required.
         """
 
-    def delete_chunk(self, cx: int, cz: int) -> None:
+    def delete_chunk(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> None:
         """
         Delete all data for the given chunk.
         External ReadWrite::SharedReadWrite lock required.
@@ -48,7 +48,9 @@ class AnvilDimension:
         External ReadWrite:Unique lock required.
         """
 
-    def get_chunk_data(self, cx: int, cz: int) -> dict[str, amulet.nbt.NamedTag]:
+    def get_chunk_data(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt
+    ) -> dict[str, amulet.nbt.NamedTag]:
         """
         Get the data for a chunk
         External Read::SharedReadWrite lock required.
@@ -62,7 +64,7 @@ class AnvilDimension:
         // External ReadWrite::SharedReadWrite lock required if calling ReadWrite methods on AnvilDimensionLayer.
         """
 
-    def has_chunk(self, cx: int, cz: int) -> bool:
+    def has_chunk(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
         """
         Check if a chunk exists.
         External Read::SharedReadWrite lock required.
@@ -85,8 +87,8 @@ class AnvilDimension:
 
     def set_chunk_data(
         self,
-        cx: int,
-        cz: int,
+        cx: typing.SupportsInt,
+        cz: typing.SupportsInt,
         data_layers: collections.abc.Iterable[tuple[str, amulet.nbt.NamedTag]],
     ) -> None:
         """
@@ -129,14 +131,14 @@ class AnvilDimensionLayer:
     """
 
     def __init__(self, directory: str, mcc: bool = False) -> None: ...
-    def all_chunk_coords(self) -> typing.Iterator[tuple[int, int]]:
+    def all_chunk_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         An iterator of all chunk coordinates in this layer.
         External Read::SharedReadWrite lock required.
         External Read::SharedReadOnly lock optional.
         """
 
-    def all_region_coords(self) -> typing.Iterator[tuple[int, int]]:
+    def all_region_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         An iterator of all region coordinates in this layer.
         External Read::SharedReadWrite lock required.
@@ -149,7 +151,7 @@ class AnvilDimensionLayer:
         External ReadWrite::SharedReadOnly lock required.
         """
 
-    def delete_chunk(self, cx: int, cz: int) -> None:
+    def delete_chunk(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> None:
         """
         Delete the chunk data from this layer.
         External ReadWrite::SharedReadWrite lock required.
@@ -163,7 +165,9 @@ class AnvilDimensionLayer:
         External ReadWrite:Unique lock required.
         """
 
-    def get_chunk_data(self, cx: int, cz: int) -> amulet.nbt.NamedTag:
+    def get_chunk_data(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt
+    ) -> amulet.nbt.NamedTag:
         """
         Get a NamedTag of a chunk from the database.
         Will raise ChunkDoesNotExist if the region or chunk does not exist
@@ -171,7 +175,7 @@ class AnvilDimensionLayer:
         """
 
     def get_region(
-        self, rx: int, rz: int, create: bool = False
+        self, rx: typing.SupportsInt, rz: typing.SupportsInt, create: bool = False
     ) -> amulet.anvil.region.AnvilRegion:
         """
         Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
@@ -181,7 +185,7 @@ class AnvilDimensionLayer:
         """
 
     def get_region_at_chunk(
-        self, cx: int, cz: int, create: bool = False
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt, create: bool = False
     ) -> amulet.anvil.region.AnvilRegion:
         """
         Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
@@ -190,21 +194,23 @@ class AnvilDimensionLayer:
         External ReadWrite::SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
         """
 
-    def has_chunk(self, cx: int, cz: int) -> bool:
+    def has_chunk(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
         """
         Check if the chunk has data in this layer.
         External Read::SharedReadWrite lock required.
         External Read::SharedReadOnly lock optional.
         """
 
-    def has_region(self, rx: int, rz: int) -> bool:
+    def has_region(self, rx: typing.SupportsInt, rz: typing.SupportsInt) -> bool:
         """
         Check if a region file exists in this layer at given the coordinates.
         External Read::SharedReadWrite lock required.
         External Read::SharedReadOnly lock optional.
         """
 
-    def has_region_at_chunk(self, cx: int, cz: int) -> bool:
+    def has_region_at_chunk(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt
+    ) -> bool:
         """
         Check if a region file exists in this layer that contains the given chunk.
         External Read::SharedReadWrite lock required.
@@ -218,7 +224,9 @@ class AnvilDimensionLayer:
         External Read:SharedReadWrite lock required.
         """
 
-    def set_chunk_data(self, cx: int, cz: int, tag: amulet.nbt.NamedTag) -> None:
+    def set_chunk_data(
+        self, cx: typing.SupportsInt, cz: typing.SupportsInt, tag: amulet.nbt.NamedTag
+    ) -> None:
         """
         Set the chunk data for this layer.
         External ReadWrite::SharedReadWrite lock required.

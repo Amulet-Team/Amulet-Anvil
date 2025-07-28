@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging as logging
 import typing
 
 import amulet.nbt
@@ -17,7 +16,6 @@ __all__ = [
     "RegionDoesNotExist",
     "compiler_config",
     "dimension",
-    "logging",
     "region",
 ]
 
