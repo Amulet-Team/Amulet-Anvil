@@ -18,10 +18,18 @@ else()
 endif()
 
 # Find dependencies
-find_package(pybind11 CONFIG REQUIRED)
-find_package(amulet_pybind11_extensions CONFIG REQUIRED)
-find_package(amulet_test_utils CONFIG REQUIRED)
-find_package(amulet_anvil CONFIG REQUIRED)
+if (NOT TARGET pybind11::module)
+    find_package(pybind11 CONFIG REQUIRED)
+endif()
+if (NOT TARGET amulet_pybind11_extensions)
+    find_package(amulet_pybind11_extensions CONFIG REQUIRED)
+endif()
+if (NOT TARGET amulet_test_utils)
+    find_package(amulet_test_utils CONFIG REQUIRED)
+endif()
+if (NOT TARGET amulet_anvil)
+    find_package(amulet_anvil CONFIG REQUIRED)
+endif()
 
 # Find sources
 file(GLOB_RECURSE SOURCES LIST_DIRECTORIES false "${CMAKE_CURRENT_LIST_DIR}/*.py.cpp")
