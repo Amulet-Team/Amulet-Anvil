@@ -50,7 +50,7 @@ def main():
             f"-Damulet_core_DIR={fix_path(amulet.core.__path__[0])}",
             f"-Damulet_anvil_DIR={fix_path(os.path.join(RootDir, 'src', 'amulet', 'anvil'))}",
             f"-DCMAKE_INSTALL_PREFIX=install",
-            f"-DBUILD_AMULET_ANVIL_TESTS=",
+            f"-DBUILD_AMULET_ANVIL_TESTS=ON",
             "-B",
             "build",
         ]

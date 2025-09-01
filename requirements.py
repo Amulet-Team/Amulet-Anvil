@@ -1,16 +1,16 @@
 import os
 from packaging.version import Version
+import get_compiler
 
 AMULET_COMPILER_TARGET_REQUIREMENT = "==2.0"
-AMULET_COMPILER_VERSION_REQUIREMENT = "==3.0.0"
 
 PYBIND11_REQUIREMENT = "==3.0.0"
 AMULET_PYBIND11_EXTENSIONS_REQUIREMENT = "~=1.1.0.0a0"
 AMULET_IO_REQUIREMENT = "~=1.0"
-AMULET_UTILS_REQUIREMENT = "~=1.1.1.0a0"
-AMULET_ZLIB_REQUIREMENT = "~=1.0.1.0a0"
-AMULET_NBT_REQUIREMENT = "~=5.0.1.0a0"
-AMULET_CORE_REQUIREMENT = "~=2.0.4.0a0"
+AMULET_UTILS_REQUIREMENT = "~=1.1.3.0a0"
+AMULET_ZLIB_REQUIREMENT = "~=1.0.8.0a0"
+AMULET_NBT_REQUIREMENT = "~=5.0.2.0a0"
+AMULET_CORE_REQUIREMENT = "~=2.0.5.0a0"
 
 if os.environ.get("AMULET_PYBIND11_EXTENSIONS_REQUIREMENT", None):
     AMULET_PYBIND11_EXTENSIONS_REQUIREMENT = f"{AMULET_PYBIND11_EXTENSIONS_REQUIREMENT},{os.environ['AMULET_PYBIND11_EXTENSIONS_REQUIREMENT']}"
@@ -52,54 +52,52 @@ def get_specifier_set(version_str: str) -> str:
     return f"~={version.major}.{version.minor}.{version.micro}.0{''.join(map(str, version.pre or ()))}"
 
 
-if os.environ.get("AMULET_FREEZE_COMPILER", None):
-    import get_compiler
+AMULET_COMPILER_VERSION_REQUIREMENT = get_compiler.main()
 
-    AMULET_COMPILER_VERSION_REQUIREMENT = get_compiler.main()
 
-    try:
-        import amulet.pybind11_extensions
-    except ImportError:
-        pass
-    else:
-        AMULET_PYBIND11_EXTENSIONS_REQUIREMENT = get_specifier_set(
-            amulet.pybind11_extensions.__version__
-        )
+try:
+    import amulet.pybind11_extensions
+except ImportError:
+    pass
+else:
+    AMULET_PYBIND11_EXTENSIONS_REQUIREMENT = get_specifier_set(
+        amulet.pybind11_extensions.__version__
+    )
 
-    try:
-        import amulet.io
-    except ImportError:
-        pass
-    else:
-        AMULET_IO_REQUIREMENT = get_specifier_set(amulet.io.__version__)
+try:
+    import amulet.io
+except ImportError:
+    pass
+else:
+    AMULET_IO_REQUIREMENT = get_specifier_set(amulet.io.__version__)
 
-    try:
-        import amulet.utils
-    except ImportError:
-        pass
-    else:
-        AMULET_UTILS_REQUIREMENT = get_specifier_set(amulet.utils.__version__)
+try:
+    import amulet.utils
+except ImportError:
+    pass
+else:
+    AMULET_UTILS_REQUIREMENT = get_specifier_set(amulet.utils.__version__)
 
-    try:
-        import amulet.zlib
-    except ImportError:
-        pass
-    else:
-        AMULET_ZLIB_REQUIREMENT = get_specifier_set(amulet.zlib.__version__)
+try:
+    import amulet.zlib
+except ImportError:
+    pass
+else:
+    AMULET_ZLIB_REQUIREMENT = get_specifier_set(amulet.zlib.__version__)
 
-    try:
-        import amulet.nbt
-    except ImportError:
-        pass
-    else:
-        AMULET_NBT_REQUIREMENT = get_specifier_set(amulet.nbt.__version__)
+try:
+    import amulet.nbt
+except ImportError:
+    pass
+else:
+    AMULET_NBT_REQUIREMENT = get_specifier_set(amulet.nbt.__version__)
 
-    try:
-        import amulet.core
-    except ImportError:
-        pass
-    else:
-        AMULET_CORE_REQUIREMENT = get_specifier_set(amulet.core.__version__)
+try:
+    import amulet.core
+except ImportError:
+    pass
+else:
+    AMULET_CORE_REQUIREMENT = get_specifier_set(amulet.core.__version__)
 
 
 def get_build_dependencies() -> list:
