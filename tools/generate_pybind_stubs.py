@@ -58,18 +58,18 @@ def eq_sub_func(match: re.Match) -> str:
         else:
             return "\n".join(
                 [
-                    f"{match.group('indent')}def __eq__(self, arg0: {match.group('other')}) -> {match.group('return')}:{match.group('ellipsis_docstring')}",
+                    f"{match.group('indent')}def __eq__(self, other: {match.group('other')}) -> {match.group('return')}:{match.group('ellipsis_docstring')}",
                     f"{match.group('indent')}@typing.overload",
-                    f"{match.group('indent')}def __eq__(self, arg0: typing.Any) -> bool | types.NotImplementedType: ...",
+                    f"{match.group('indent')}def __eq__(self, other: typing.Any) -> bool | types.NotImplementedType: ...",
                 ]
             )
     else:
         return "\n".join(
             [
                 f"{match.group('indent')}@typing.overload",
-                f"{match.group('indent')}def __eq__(self, arg0: {match.group('other')}) -> {match.group('return')}:{match.group('ellipsis_docstring')}",
+                f"{match.group('indent')}def __eq__(self, other: {match.group('other')}) -> {match.group('return')}:{match.group('ellipsis_docstring')}",
                 f"{match.group('indent')}@typing.overload",
-                f"{match.group('indent')}def __eq__(self, arg0: typing.Any) -> bool | types.NotImplementedType: ...",
+                f"{match.group('indent')}def __eq__(self, other: typing.Any) -> bool | types.NotImplementedType: ...",
             ]
         )
 
@@ -244,13 +244,12 @@ def main() -> None:
         pyi = EqPattern.sub(eq_sub_func, pyi)
         pyi = pyi.replace("**kwargs)", "**kwargs: typing.Any)")
         pyi_split = [l.rstrip("\r") for l in pyi.split("\n")]
-        for hidden_import in ["amulet.nbt"]:
+        for hidden_import in ["amulet.nbt", "typing", "types"]:
             if hidden_import in pyi and f"import {hidden_import}" not in pyi_split:
-                pyi_split.insert(2, f"import {hidden_import}")
-        if "import typing" not in pyi_split:
-            pyi_split.insert(2, "import typing")
-        if "import types" not in pyi_split:
-            pyi_split.insert(2, "import types")
+                pyi_split.insert(
+                    pyi_split.index("from __future__ import annotations") + 1,
+                    f"import {hidden_import}",
+                )
         pyi = "\n".join(pyi_split)
         with open(stub_path, "w", encoding="utf-8") as f:
             f.write(pyi)

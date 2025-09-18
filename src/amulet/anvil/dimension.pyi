@@ -7,7 +7,7 @@ import amulet.anvil.region
 import amulet.nbt
 import amulet.utils.lock
 
-__all__ = ["AnvilDimension", "AnvilDimensionLayer", "RawChunkType"]
+__all__: list[str] = ["AnvilDimension", "AnvilDimensionLayer", "RawChunkType"]
 
 class AnvilDimension:
     """

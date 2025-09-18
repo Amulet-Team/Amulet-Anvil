@@ -6,7 +6,7 @@ import typing
 import amulet.nbt
 import amulet.utils.lock
 
-__all__ = ["AnvilRegion", "RegionDoesNotExist"]
+__all__: list[str] = ["AnvilRegion", "RegionDoesNotExist"]
 
 class AnvilRegion:
     """
