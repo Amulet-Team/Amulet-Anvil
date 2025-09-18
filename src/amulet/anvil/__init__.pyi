@@ -8,7 +8,7 @@ from amulet.anvil.region import AnvilRegion, RegionDoesNotExist
 
 from . import _amulet_anvil, _version, dimension, region
 
-__all__ = [
+__all__: list[str] = [
     "AnvilDimension",
     "AnvilDimensionLayer",
     "AnvilRegion",
