@@ -10,7 +10,6 @@ import amulet.test_utils
 import amulet.utils
 import amulet.zlib
 import amulet.nbt
-import amulet.core
 
 
 def fix_path(path: str) -> str:
@@ -47,7 +46,6 @@ def main():
             f"-Damulet_utils_DIR={fix_path(amulet.utils.__path__[0])}",
             f"-Damulet_zlib_DIR={fix_path(amulet.zlib.__path__[0])}",
             f"-Damulet_nbt_DIR={fix_path(amulet.nbt.__path__[0])}",
-            f"-Damulet_core_DIR={fix_path(amulet.core.__path__[0])}",
             f"-Damulet_anvil_DIR={fix_path(os.path.join(RootDir, 'src', 'amulet', 'anvil'))}",
             f"-DCMAKE_INSTALL_PREFIX=install",
             f"-DBUILD_AMULET_ANVIL_TESTS=ON",

@@ -14,7 +14,6 @@ void init_module(py::module m)
     pyext::check_compatibility(py::module::import("amulet.utils"), m);
     pyext::check_compatibility(py::module::import("amulet.zlib"), m);
     pyext::check_compatibility(py::module::import("amulet.nbt"), m);
-    pyext::check_compatibility(py::module::import("amulet.core"), m);
 
     auto region = init_anvil_region(m);
     auto dimension = init_anvil_dimension(m);
