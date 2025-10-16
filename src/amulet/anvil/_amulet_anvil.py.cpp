@@ -20,6 +20,7 @@ void init_module(py::module m)
 
     m.attr("AnvilRegion") = region.attr("AnvilRegion");
     m.attr("RegionDoesNotExist") = region.attr("RegionDoesNotExist");
+    m.attr("RegionEntryDoesNotExist") = region.attr("RegionEntryDoesNotExist");
     m.attr("AnvilDimensionLayer") = dimension.attr("AnvilDimensionLayer");
     m.attr("AnvilDimension") = dimension.attr("AnvilDimension");
     m.attr("RawChunkType") = dimension.attr("RawChunkType");

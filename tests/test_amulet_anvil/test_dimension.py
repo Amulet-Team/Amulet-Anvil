@@ -3,10 +3,10 @@ import unittest
 
 from amulet.nbt import NamedTag, CompoundTag, StringTag
 
-from amulet.core.chunk import ChunkDoesNotExist
 from amulet.anvil import (
     AnvilRegion,
     RegionDoesNotExist,
+    RegionEntryDoesNotExist,
     AnvilDimension,
     AnvilDimensionLayer,
 )
@@ -56,9 +56,9 @@ class AnvilDimensionLayerTestCase(unittest.TestCase):
 
             # Get chunk
             self.assertIsInstance(layer.get_chunk_data(0, 0), NamedTag)
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 layer.get_chunk_data(20, 0)
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 layer.get_chunk_data(50, 50)
 
             # Set chunk
@@ -74,7 +74,7 @@ class AnvilDimensionLayerTestCase(unittest.TestCase):
             # Delete chunk
             layer.delete_chunk(50, 50)
             self.assertFalse(layer.has_chunk(50, 50))
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 layer.get_chunk_data(50, 50)
             self.assertEqual(
                 {(0, 0), (0, -1), (-1, 0), (-1, -1), (1, 1)},
@@ -144,7 +144,7 @@ class AnvilDimensionTestCase(unittest.TestCase):
             for k, v in chunk_data.items():
                 self.assertIsInstance(k, str)
                 self.assertIsInstance(v, NamedTag)
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 dimension.get_chunk_data(50, 50)
 
             # Set chunk
@@ -155,7 +155,7 @@ class AnvilDimensionTestCase(unittest.TestCase):
 
             # Delete chunk
             dimension.delete_chunk(50, 50)
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 dimension.get_chunk_data(50, 50)
             self.assertTrue(region_layer.has_region(1, 1))
 

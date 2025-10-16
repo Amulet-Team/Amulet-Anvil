@@ -165,7 +165,7 @@ public:
     AMULET_ANVIL_EXPORT bool has_chunk(std::int64_t cx, std::int64_t cz);
 
     // Get the chunk data for this layer.
-    // Will throw ChunkDoesNotExist if the chunk does not exist.
+    // Will throw RegionEntryDoesNotExist if the chunk does not exist.
     // External Read::SharedReadWrite lock required.
     AMULET_ANVIL_EXPORT Amulet::NBT::NamedTag get_chunk_data(std::int64_t cx, std::int64_t cz);
 

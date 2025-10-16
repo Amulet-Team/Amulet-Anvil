@@ -297,4 +297,13 @@ public:
     }
 };
 
+class AMULET_ANVIL_EXPORT_EXCEPTION RegionEntryDoesNotExist : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+    RegionEntryDoesNotExist()
+        : RegionEntryDoesNotExist("RegionDoesNotExist")
+    {
+    }
+};
+
 } // namespace Amulet

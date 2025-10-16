@@ -114,7 +114,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("cz"),
         py::doc(
             "Get a NamedTag of a chunk from the database.\n"
-            "Will raise ChunkDoesNotExist if the region or chunk does not exist\n"
+            "Will raise RegionEntryDoesNotExist if the region or chunk does not exist\n"
             "External Read::SharedReadWrite lock required."));
     AnvilDimensionLayer.def(
         "set_chunk_data",

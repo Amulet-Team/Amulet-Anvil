@@ -15,8 +15,6 @@
 
 #include <amulet/nbt/nbt_encoding/binary.hpp>
 
-#include <amulet/core/chunk/chunk.hpp>
-
 #include <amulet/utils/logging.hpp>
 
 #include <amulet/zlib/zlib.hpp>
@@ -368,7 +366,7 @@ NamedTag AnvilRegion::get_value(std::int64_t cx, std::int64_t cz)
     read_file_header();
     auto it = _chunk_locations.find(std::make_pair(cx, cz));
     if (it == _chunk_locations.end()) {
-        throw ChunkDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
+        throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     create_open_region_file_if_closed();
     auto& regionf = _shared->regionf;
