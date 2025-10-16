@@ -183,6 +183,7 @@ py::module init_anvil_region(py::module m_parent)
                 "Thread safe."));
 
     py::register_exception<Amulet::RegionDoesNotExist>(m, "RegionDoesNotExist", PyExc_RuntimeError);
+    py::register_exception<Amulet::RegionEntryDoesNotExist>(m, "RegionEntryDoesNotExist", PyExc_RuntimeError);
 
     return m;
 }

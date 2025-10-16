@@ -10,7 +10,6 @@ AMULET_IO_REQUIREMENT = "~=1.0"
 AMULET_UTILS_REQUIREMENT = "~=1.1.3.0a0"
 AMULET_ZLIB_REQUIREMENT = "~=1.0.8.0a0"
 AMULET_NBT_REQUIREMENT = "~=5.0.2.0a0"
-AMULET_CORE_REQUIREMENT = "~=2.0.6.0a0"
 
 if os.environ.get("AMULET_PYBIND11_EXTENSIONS_REQUIREMENT", None):
     AMULET_PYBIND11_EXTENSIONS_REQUIREMENT = f"{AMULET_PYBIND11_EXTENSIONS_REQUIREMENT},{os.environ['AMULET_PYBIND11_EXTENSIONS_REQUIREMENT']}"
@@ -33,11 +32,6 @@ if os.environ.get("AMULET_ZLIB_REQUIREMENT", None):
 if os.environ.get("AMULET_NBT_REQUIREMENT", None):
     AMULET_NBT_REQUIREMENT = (
         f"{AMULET_NBT_REQUIREMENT},{os.environ['AMULET_NBT_REQUIREMENT']}"
-    )
-
-if os.environ.get("AMULET_CORE_REQUIREMENT", None):
-    AMULET_CORE_REQUIREMENT = (
-        f"{AMULET_CORE_REQUIREMENT},{os.environ['AMULET_CORE_REQUIREMENT']}"
     )
 
 
@@ -92,13 +86,6 @@ except ImportError:
 else:
     AMULET_NBT_REQUIREMENT = get_specifier_set(amulet.nbt.__version__)
 
-try:
-    import amulet.core
-except ImportError:
-    pass
-else:
-    AMULET_CORE_REQUIREMENT = get_specifier_set(amulet.core.__version__)
-
 
 def get_build_dependencies() -> list:
     return [
@@ -109,7 +96,6 @@ def get_build_dependencies() -> list:
         f"amulet-utils{AMULET_UTILS_REQUIREMENT}",
         f"amulet-zlib{AMULET_ZLIB_REQUIREMENT}",
         f"amulet-nbt{AMULET_NBT_REQUIREMENT}",
-        f"amulet-core{AMULET_CORE_REQUIREMENT}",
     ] * (not os.environ.get("AMULET_SKIP_COMPILE", None))
 
 
@@ -123,5 +109,4 @@ def get_runtime_dependencies() -> list[str]:
         f"amulet-utils{AMULET_UTILS_REQUIREMENT}",
         f"amulet-zlib{AMULET_ZLIB_REQUIREMENT}",
         f"amulet-nbt{AMULET_NBT_REQUIREMENT}",
-        f"amulet-core{AMULET_CORE_REQUIREMENT}",
     ]

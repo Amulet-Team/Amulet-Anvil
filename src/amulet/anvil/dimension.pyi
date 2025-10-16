@@ -170,7 +170,7 @@ class AnvilDimensionLayer:
     ) -> amulet.nbt.NamedTag:
         """
         Get a NamedTag of a chunk from the database.
-        Will raise ChunkDoesNotExist if the region or chunk does not exist
+        Will raise RegionEntryDoesNotExist if the region or chunk does not exist
         External Read::SharedReadWrite lock required.
         """
 

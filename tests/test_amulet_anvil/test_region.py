@@ -10,8 +10,7 @@ import time
 
 from amulet.nbt import NamedTag, CompoundTag, StringTag, ListTag
 
-from amulet.core.chunk import ChunkDoesNotExist
-from amulet.anvil import AnvilRegion, RegionDoesNotExist
+from amulet.anvil import AnvilRegion, RegionDoesNotExist, RegionEntryDoesNotExist
 import amulet.minecraft_worlds
 import test_amulet_anvil.region
 from test_amulet_anvil.test_region_ import (
@@ -275,14 +274,14 @@ class AnvilRegionTestCase(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             region = AnvilRegion(tmpdir, 0, 0)
 
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 region.get_value(0, 0)
 
             with self.assertRaises(ValueError):
                 region.has_value(-1, -1)
             with self.assertRaises(ValueError):
                 region.has_value(32, 0)
-            with self.assertRaises(ChunkDoesNotExist):
+            with self.assertRaises(RegionEntryDoesNotExist):
                 region.get_value(0, 0)
 
             value = NamedTag(CompoundTag(test=StringTag("test")), "test")

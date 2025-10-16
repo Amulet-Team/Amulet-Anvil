@@ -1,8 +1,6 @@
 #include <algorithm>
 #include <mutex>
 
-#include <amulet/core/chunk/chunk.hpp>
-
 #include "dimension.hpp"
 #include "region.hpp"
 
@@ -236,7 +234,7 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
     try {
         region = get_region(cx >> 5, cz >> 5);
     } catch (RegionDoesNotExist) {
-        throw ChunkDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
+        throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     auto& region_mutex = region->get_mutex();
     region_mutex.lock<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite>();
@@ -369,14 +367,14 @@ JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
         std::lock_guard region_lock(layer_mutex, std::adopt_lock);
         try {
             chunk_data.emplace(layer_name, layer.get_chunk_data(cx, cz));
-        } catch (ChunkDoesNotExist) {
+        } catch (RegionEntryDoesNotExist) {
         }
     }
     if (chunk_data.empty()) {
         if (destroyed) {
             throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
         }
-        throw ChunkDoesNotExist();
+        throw RegionEntryDoesNotExist();
     }
     return chunk_data;
 }

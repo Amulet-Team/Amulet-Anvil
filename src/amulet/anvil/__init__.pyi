@@ -4,7 +4,7 @@ import typing
 
 import amulet.nbt
 from amulet.anvil.dimension import AnvilDimension, AnvilDimensionLayer
-from amulet.anvil.region import AnvilRegion, RegionDoesNotExist
+from amulet.anvil.region import AnvilRegion, RegionDoesNotExist, RegionEntryDoesNotExist
 
 from . import _amulet_anvil, _version, dimension, region
 
@@ -14,6 +14,7 @@ __all__: list[str] = [
     "AnvilRegion",
     "RawChunkType",
     "RegionDoesNotExist",
+    "RegionEntryDoesNotExist",
     "compiler_config",
     "dimension",
     "region",
