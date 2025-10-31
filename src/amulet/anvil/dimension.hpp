@@ -15,8 +15,8 @@
 
 #include <amulet/nbt/tag/named_tag.hpp>
 
-#include <amulet/utils/mutex.hpp>
 #include <amulet/utils/logging.hpp>
+#include <amulet/utils/mutex.hpp>
 
 #include <amulet/anvil/dll.hpp>
 
@@ -311,9 +311,7 @@ public:
                 }
             }
             auto& layer = it->second;
-            auto& layer_mutex = layer->get_mutex();
-            layer_mutex.lock<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite>();
-            std::lock_guard lock(layer_mutex, std::adopt_lock);
+            OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> lock(layer->get_mutex());
             if constexpr (std::is_same_v<decltype(data), const std::optional<Amulet::NBT::NamedTag>>) {
                 if (data) {
                     layer->set_chunk_data(cx, cz, *data);
