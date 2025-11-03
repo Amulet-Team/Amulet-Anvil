@@ -1,24 +1,22 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <amulet/pybind11_extensions/nogil_holder.hpp>
-
 #include "region.hpp"
 
 namespace py = pybind11;
-namespace pyext = Amulet::pybind11_extensions;
 
 py::module init_anvil_region(py::module m_parent)
 {
     py::module m = m_parent.def_submodule("region");
 
-    py::class_<Amulet::AnvilRegion, pyext::nogil_shared_ptr<Amulet::AnvilRegion>> AnvilRegion(m, "AnvilRegion",
+    py::classh<Amulet::AnvilRegion>
+        AnvilRegion(m, "AnvilRegion", py::release_gil_before_calling_cpp_dtor(),
         "A class to read and write Minecraft Java Edition Region files.\n"
         "Only one instance should exist per region file at any given time otherwise bad things may happen.\n"
         "This class is internally thread safe but a public lock is provided to enable external synchronisation.\n"
         "Upstream locks from the level must also be adhered to.");
 
-    py::class_<Amulet::AnvilRegion::FileCloser, std::shared_ptr<Amulet::AnvilRegion::FileCloser>>
+    py::classh<Amulet::AnvilRegion::FileCloser>
         FileCloser(AnvilRegion, "FileCloser",
             "A class to manage closing the region file.\n"
             "When the instance is deleted the region file will be closed.\n"
