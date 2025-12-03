@@ -37,7 +37,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(lz4)
 set(LZ4_BUILD_CLI OFF)
 add_subdirectory(${lz4_SOURCE_DIR}/build/cmake ${CMAKE_BINARY_DIR}/lz4)
-
+set_target_properties(lz4_static PROPERTIES FOLDER "ThirdParty")
 
 # Find libraries
 if (NOT TARGET pybind11::module)
@@ -70,6 +70,7 @@ list(REMOVE_ITEM HEADERS ${EXTENSION_HEADERS})
 
 # Add implementation
 add_library(amulet_anvil SHARED)
+set_target_properties(amulet_anvil PROPERTIES FOLDER "CPP")
 target_compile_definitions(amulet_anvil PRIVATE ExportAmuletAnvil)
 target_link_libraries(amulet_anvil PRIVATE lz4_static)
 target_link_libraries(amulet_anvil PUBLIC pybind11::module)
@@ -89,6 +90,7 @@ endforeach()
 
 # Add python extension
 pybind11_add_module(_amulet_anvil)
+set_target_properties(_amulet_anvil PROPERTIES FOLDER "Python")
 target_link_libraries(_amulet_anvil PRIVATE amulet_pybind11_extensions)
 target_link_libraries(_amulet_anvil PRIVATE amulet_anvil)
 target_compile_definitions(_amulet_anvil PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
