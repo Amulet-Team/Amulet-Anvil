@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <amulet/anvil/dll.hpp>
+
 namespace Amulet {
 
 class AMULET_ANVIL_EXPORT NoValidSector : public std::runtime_error {
