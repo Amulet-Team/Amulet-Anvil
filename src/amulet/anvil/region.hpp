@@ -288,22 +288,24 @@ public:
     AMULET_ANVIL_EXPORT std::shared_ptr<FileCloser> get_file_closer();
 };
 
-class AMULET_ANVIL_EXPORT_EXCEPTION RegionDoesNotExist : public std::runtime_error {
+class AMULET_ANVIL_EXPORT RegionDoesNotExist : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
     RegionDoesNotExist()
         : RegionDoesNotExist("RegionDoesNotExist")
     {
     }
+    ~RegionDoesNotExist() noexcept override;
 };
 
-class AMULET_ANVIL_EXPORT_EXCEPTION RegionEntryDoesNotExist : public std::runtime_error {
+class AMULET_ANVIL_EXPORT RegionEntryDoesNotExist : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
     RegionEntryDoesNotExist()
         : RegionEntryDoesNotExist("RegionDoesNotExist")
     {
     }
+    ~RegionEntryDoesNotExist() noexcept override;
 };
 
 } // namespace Amulet
