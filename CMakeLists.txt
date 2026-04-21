@@ -39,6 +39,8 @@ set(LZ4_BUILD_CLI OFF)
 add_subdirectory(${lz4_SOURCE_DIR}/build/cmake ${CMAKE_BINARY_DIR}/lz4)
 set_target_properties(lz4_static PROPERTIES FOLDER "ThirdParty")
 
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
 # Find libraries
 if (NOT TARGET pybind11::module)
     find_package(pybind11 CONFIG REQUIRED)
