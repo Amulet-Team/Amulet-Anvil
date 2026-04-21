@@ -677,4 +677,7 @@ AnvilRegion::FileCloser::~FileCloser()
     }
 }
 
+RegionDoesNotExist::~RegionDoesNotExist() noexcept {}
+RegionEntryDoesNotExist::~RegionEntryDoesNotExist() noexcept {}
+
 } // namespace Amulet

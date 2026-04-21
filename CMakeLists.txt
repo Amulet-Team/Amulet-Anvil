@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 4.1)
 
 project(amulet_anvil LANGUAGES CXX)
 
@@ -39,6 +39,8 @@ set(LZ4_BUILD_CLI OFF)
 add_subdirectory(${lz4_SOURCE_DIR}/build/cmake ${CMAKE_BINARY_DIR}/lz4)
 set_target_properties(lz4_static PROPERTIES FOLDER "ThirdParty")
 
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
 # Find libraries
 if (NOT TARGET pybind11::module)
     find_package(pybind11 CONFIG REQUIRED)
@@ -70,6 +72,7 @@ list(REMOVE_ITEM HEADERS ${EXTENSION_HEADERS})
 
 # Add implementation
 add_library(amulet_anvil SHARED)
+set_target_properties(amulet_anvil PROPERTIES CXX_VISIBILITY_PRESET hidden)
 set_target_properties(amulet_anvil PROPERTIES FOLDER "CPP")
 target_compile_definitions(amulet_anvil PRIVATE ExportAmuletAnvil)
 target_link_libraries(amulet_anvil PRIVATE lz4_static)
@@ -90,6 +93,7 @@ endforeach()
 
 # Add python extension
 pybind11_add_module(_amulet_anvil)
+set_target_properties(_amulet_anvil PROPERTIES CXX_VISIBILITY_PRESET hidden)
 set_target_properties(_amulet_anvil PROPERTIES FOLDER "Python")
 target_link_libraries(_amulet_anvil PRIVATE amulet_pybind11_extensions)
 target_link_libraries(_amulet_anvil PRIVATE amulet_anvil)
