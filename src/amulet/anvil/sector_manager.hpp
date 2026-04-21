@@ -6,8 +6,10 @@
 
 namespace Amulet {
 
-class NoValidSector : public std::runtime_error {
+class AMULET_ANVIL_EXPORT NoValidSector : public std::runtime_error {
+public:
     using std::runtime_error::runtime_error;
+    ~NoValidSector() noexcept override;
 };
 
 class Sector {

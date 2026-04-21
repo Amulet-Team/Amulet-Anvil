@@ -4,6 +4,8 @@
 
 namespace Amulet {
 
+NoValidSector::~NoValidSector() noexcept {}
+
 size_t Sector::length() const { return stop - start; }
 
 // Do the two sectors intersect each other.
