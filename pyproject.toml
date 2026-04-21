@@ -14,7 +14,7 @@ authors = [
 ]
 description = "A C++ library with Python wrapper for the Minecraft Anvil format."
 dynamic = ["version", "readme", "dependencies"]
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
