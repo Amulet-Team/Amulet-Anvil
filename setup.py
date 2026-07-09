@@ -47,7 +47,7 @@ class CMakeBuild(BuildExt):
 
         platform_args = []
         if sys.platform == "win32":
-            platform_args.extend(["-G", "Visual Studio 17 2022"])
+            platform_args.extend(["-G", "Visual Studio 18 2026"])
             if sysconfig.get_platform() == "win-amd64":
                 platform_args.extend(["-A", "x64"])
             elif sysconfig.get_platform() == "win32":
@@ -56,7 +56,7 @@ class CMakeBuild(BuildExt):
                 platform_args.extend(["-A", "ARM64"])
             else:
                 raise RuntimeError(f"Unsupported platform: {sysconfig.get_platform()}")
-            platform_args.extend(["-T", "v143"])
+            platform_args.extend(["-T", "v145"])
         elif sys.platform == "darwin":
             if platform.machine() == "arm64":
                 platform_args.append("-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64")
@@ -78,6 +78,7 @@ class CMakeBuild(BuildExt):
                     f"-Damulet_anvil_DIR={fix_path(anvil_src_dir)}",
                     f"-DAMULET_ANVIL_EXT_DIR={fix_path(ext_dir)}",
                     f"-DCMAKE_INSTALL_PREFIX=install",
+                    f"-DBUILD_AMULET_ANVIL_TESTS={"ON" if os.environ.get("BUILD_AMULET_ANVIL_TESTS") else "OFF"}",
                     "-B",
                     tempdir,
                 ]
