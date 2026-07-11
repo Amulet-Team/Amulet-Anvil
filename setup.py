@@ -78,7 +78,6 @@ class CMakeBuild(BuildExt):
                     f"-Damulet_anvil_DIR={fix_path(anvil_src_dir)}",
                     f"-DAMULET_ANVIL_EXT_DIR={fix_path(ext_dir)}",
                     f"-DCMAKE_INSTALL_PREFIX=install",
-                    f"-DBUILD_AMULET_ANVIL_TESTS={"ON" if os.environ.get("BUILD_AMULET_ANVIL_TESTS") else "OFF"}",
                     "-B",
                     tempdir,
                 ]
@@ -102,5 +101,7 @@ setup(
     cmdclass=cmdclass,
     ext_modules=[Extension("amulet.anvil._amulet_anvil", [])]
     * (not os.environ.get("AMULET_SKIP_COMPILE", None)),
-    install_requires=requirements.get_runtime_dependencies(),
+    install_requires=requirements.get_runtime_dependencies(
+        sys.argv[1] in ["egg_info", "sdist"]
+    ),
 )

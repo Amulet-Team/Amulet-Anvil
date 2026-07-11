@@ -37,9 +37,12 @@ jobs:
         python-version: ${{ matrix.cfg.python-version }}
         architecture: ${{ matrix.cfg.architecture }}
 
-    - name: Build
-      uses: pypa/cibuildwheel@v4.1
+    - name: Build and Test
+      run: |
+        pip install cibuildwheel~=4.1
+        cibuildwheel --only ${{ matrix.cfg.whl }} --output-dir dist .
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
       with:
-        only: ${{ matrix.cfg.whl }}
-      env:
-        BUILD_AMULET_ANVIL_TESTS=1
+        path: dist/*
