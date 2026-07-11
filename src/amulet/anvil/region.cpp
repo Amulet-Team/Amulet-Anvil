@@ -498,6 +498,8 @@ void AnvilRegion::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& ta
 
     // Create the output string
     std::string data;
+    // Reserve space to avoid resizing buffer
+    data.reserve(bnbt.size());
     // zlib compression
     data.push_back(2);
     // Compress
