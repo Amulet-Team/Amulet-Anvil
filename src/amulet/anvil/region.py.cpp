@@ -57,11 +57,9 @@ py::module init_anvil_region(py::module m_parent)
 
     AnvilRegion.def_property_readonly(
         "lock",
-        py::cpp_function(
-            &Amulet::AnvilRegion::get_mutex,
-            py::keep_alive<0, 1>(),
-            py::doc("A lock which can be used to synchronise calls.\n"
-                    "Thread safe.")));
+        &Amulet::AnvilRegion::get_mutex,
+        py::doc("A lock which can be used to synchronise calls.\n"
+                "Thread safe."));
     AnvilRegion.def_property_readonly(
         "path",
         [](Amulet::AnvilRegion& self) -> std::string { return self.path().string(); },
