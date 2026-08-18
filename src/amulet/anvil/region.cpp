@@ -715,7 +715,7 @@ std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::get_file_closer()
 }
 
 AnvilRegion::FileCloser::FileCloser(std::shared_ptr<Shared> shared)
-    : _shared(shared)
+    : _shared(std::move(shared))
 {
 }
 AnvilRegion::FileCloser::~FileCloser()
