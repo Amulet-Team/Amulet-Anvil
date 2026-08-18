@@ -13,11 +13,13 @@
 
 #include <lz4.h>
 
-#include <amulet/nbt/nbt_encoding/binary.hpp>
-
 #include <amulet/utils/logging.hpp>
+#include <amulet/utils/threading/mutex.hpp>
+#include <amulet/utils/threading/thread_safety.hpp>
 
 #include <amulet/zlib/zlib.hpp>
+
+#include <amulet/nbt/nbt_encoding/binary.hpp>
 
 #include <amulet/anvil/dll.hpp>
 
@@ -53,10 +55,12 @@ static const std::regex region_regex(R"(^r\.(\-?\d+)\.(\-?\d+)\.mca$)");
 template <typename K, typename V>
 class LRICache {
 private:
-    size_t _max_size;
-    std::list<std::pair<K, V>> _values;
-    std::map<K, typename std::list<std::pair<K, V>>::iterator> _map;
-    void remove_extra()
+    astd::mutex _mutex;
+    size_t _max_size ASTD_GUARDED_BY(_mutex);
+    std::list<std::pair<K, V>> _values ASTD_GUARDED_BY(_mutex);
+    std::map<K, typename std::list<std::pair<K, V>>::iterator> _map ASTD_GUARDED_BY(_mutex);
+
+    void remove_extra() ASTD_REQUIRES_UNIQUE(_mutex)
     {
         while (_max_size < _values.size()) {
             _map.erase(_values.front().first);
@@ -65,20 +69,13 @@ private:
     }
 
 public:
-    std::mutex mutex;
     LRICache(size_t max_size)
         : _max_size(max_size) { };
-    // The current max size value. mutex must be acquired while calling.
-    size_t max_size() const { return _max_size; };
-    // Set the max size value. mutex must be acquired while calling.
-    void set_max_size(size_t max_size)
-    {
-        _max_size = max_size;
-        remove_extra();
-    };
-    // Add an item. mutex must be acquired while calling.
+
+    // Add an item.
     void add(const K& k, const V& v)
     {
+        astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
         if (it == _map.end()) {
             // Create and insert the value
@@ -90,9 +87,11 @@ public:
             _values.splice(_values.end(), _values, it->second);
         }
     };
-    // Remove an item. mutex must be acquired while calling.
+
+    // Remove an item.
     void remove(const K& k)
     {
+        astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
         if (it != _map.end()) {
             _values.erase(it->second);
@@ -264,7 +263,6 @@ void AnvilRegion::read_file_header()
 void AnvilRegion::_close()
 {
     _shared->regionf.close();
-    std::lock_guard lock(region_file_cache.mutex);
     region_file_cache.remove(reinterpret_cast<size_t>(this));
 }
 
@@ -273,7 +271,6 @@ void AnvilRegion::_close_if_open()
     if (_shared->regionf.is_open()) {
         _close();
     } else {
-        std::lock_guard lock(region_file_cache.mutex);
         region_file_cache.remove(reinterpret_cast<size_t>(this));
     }
 }
@@ -713,7 +710,6 @@ std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::get_file_closer()
         closer = std::make_shared<AnvilRegion::FileCloser>(_shared);
         _closer = closer;
     }
-    std::lock_guard cache_lock(region_file_cache.mutex);
     region_file_cache.add(reinterpret_cast<size_t>(this), closer);
     return closer;
 }
@@ -730,7 +726,7 @@ AnvilRegion::FileCloser::~FileCloser()
     }
 }
 
-RegionDoesNotExist::~RegionDoesNotExist() noexcept {}
-RegionEntryDoesNotExist::~RegionEntryDoesNotExist() noexcept {}
+RegionDoesNotExist::~RegionDoesNotExist() noexcept { }
+RegionEntryDoesNotExist::~RegionEntryDoesNotExist() noexcept { }
 
 } // namespace Amulet
