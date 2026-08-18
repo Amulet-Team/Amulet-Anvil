@@ -20,6 +20,11 @@ def _init() -> None:
     import amulet.zlib
     import amulet.nbt
 
+    try:
+        os.add_dll_directory(__path__[0])
+    except AttributeError:
+        pass
+
     from ._amulet_anvil import init
 
     init(sys.modules[__name__])
