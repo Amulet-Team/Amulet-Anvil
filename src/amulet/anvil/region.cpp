@@ -73,7 +73,7 @@ public:
         : _max_size(max_size) { };
 
     // Add an item.
-    void add(const K& k, const V& v)
+    void add(const K& k, const V& v) ASTD_EXCLUDES(_mutex)
     {
         astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
@@ -89,7 +89,7 @@ public:
     };
 
     // Remove an item.
-    void remove(const K& k)
+    void remove(const K& k) ASTD_EXCLUDES(_mutex)
     {
         astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
