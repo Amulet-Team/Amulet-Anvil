@@ -50,6 +50,57 @@ static const std::uint64_t MaxRegionSize = SectorSize * 255; // The maximum size
 
 static const std::regex region_regex(R"(^r\.(\-?\d+)\.(\-?\d+)\.mca$)");
 
+template <typename K, typename V>
+class LRICache {
+private:
+    size_t _max_size;
+    std::list<std::pair<K, V>> _values;
+    std::map<K, typename std::list<std::pair<K, V>>::iterator> _map;
+    void remove_extra()
+    {
+        while (_max_size < _values.size()) {
+            _map.erase(_values.front().first);
+            _values.pop_front();
+        }
+    }
+
+public:
+    std::mutex mutex;
+    LRICache(size_t max_size)
+        : _max_size(max_size) { };
+    // The current max size value. mutex must be acquired while calling.
+    size_t max_size() const { return _max_size; };
+    // Set the max size value. mutex must be acquired while calling.
+    void set_max_size(size_t max_size)
+    {
+        _max_size = max_size;
+        remove_extra();
+    };
+    // Add an item. mutex must be acquired while calling.
+    void add(const K& k, const V& v)
+    {
+        auto it = _map.find(k);
+        if (it == _map.end()) {
+            // Create and insert the value
+            _values.emplace_back(k, v);
+            _map.emplace(k, --_values.end());
+            remove_extra();
+        } else {
+            // Move the value to the end.
+            _values.splice(_values.end(), _values, it->second);
+        }
+    };
+    // Remove an item. mutex must be acquired while calling.
+    void remove(const K& k)
+    {
+        auto it = _map.find(k);
+        if (it != _map.end()) {
+            _values.erase(it->second);
+            _map.erase(it);
+        }
+    }
+};
+
 static LRICache<size_t, std::shared_ptr<AnvilRegion::FileCloser>> region_file_cache(64);
 
 std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& filename)
