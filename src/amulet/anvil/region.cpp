@@ -540,7 +540,7 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         throw std::runtime_error("Failed reading buffer.");
     }
 
-    if (mcc && buffer[0] & 128) {
+    if (mcc && (buffer[0] & 128)) {
         // mcc files are supported and external bit is set.
         std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
         std::ifstream mccf(mcc_path, std::ios::in | std::ios::binary);
