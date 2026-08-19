@@ -527,6 +527,10 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
     }
     big_endian_swap(buffer_size);
 
+    if (buffer_size < 1 || buffer_size > MaxRegionSize) {
+        throw std::runtime_error("Invalid buffer size " + std::to_string(buffer_size) + ".");
+    }
+
     // Read the buffer.
     std::string buffer(buffer_size, 0);
     if (!regionf.read(buffer.data(), buffer_size)) {
