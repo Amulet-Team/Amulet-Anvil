@@ -181,7 +181,7 @@ class AMULET_ANVIL_EXPORT RegionEntryDoesNotExist : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
     RegionEntryDoesNotExist()
-        : RegionEntryDoesNotExist("RegionDoesNotExist")
+        : RegionEntryDoesNotExist("RegionEntryDoesNotExist")
     {
     }
     ~RegionEntryDoesNotExist() noexcept override;
