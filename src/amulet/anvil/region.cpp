@@ -448,6 +448,7 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
 {
     // https://github.com/lz4/lz4-java/blob/7c931bef32d179ec3d3286ee71638b23ebde3459/src/java/net/jpountz/lz4/LZ4BlockInputStream.java#L200
     size_t index = 0;
+    size_t max_decompression_size = Amulet::zlib::get_max_decompression_size();
     while (index < src.size()) {
         if (src.size() < index + 21) {
             throw std::invalid_argument("Corrupt lz4 data. Needed 21 bytes for the header.");
@@ -480,7 +481,11 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
         }
         case COMPRESSION_METHOD_LZ4: {
             size_t buf_index = dst.size();
-            dst.resize(dst.size() + original_length);
+            size_t new_size = dst.size() + original_length;
+            if (max_decompression_size < new_size) {
+                throw Amulet::zlib::ZipBombException("LZ4 decompressed data is too large. Max configured size: " + std::to_string(max_decompression_size));
+            }
+            dst.resize(new_size);
             auto decompressed_length = LZ4_decompress_safe(&src[index], &dst[buf_index], compressed_length, original_length);
             if (decompressed_length != original_length) {
                 throw std::invalid_argument("LZ4 compressed block is corrupted.");
