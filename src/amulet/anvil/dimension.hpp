@@ -13,10 +13,13 @@
 #include <type_traits>
 #include <utility>
 
-#include <amulet/nbt/tag/named_tag.hpp>
-
 #include <amulet/utils/logging.hpp>
-#include <amulet/utils/mutex.hpp>
+#include <amulet/utils/threading/mutex.hpp>
+#include <amulet/utils/threading/ordered_mutex.hpp>
+#include <amulet/utils/threading/shared_mutex.hpp>
+#include <amulet/utils/threading/thread_safety.hpp>
+
+#include <amulet/nbt/tag/named_tag.hpp>
 
 #include <amulet/anvil/dll.hpp>
 
@@ -94,11 +97,11 @@ static_assert(std::input_iterator<AnvilChunkCoordIterator>);
 class AMULET_ANVIL_EXPORT AnvilDimensionLayer {
 private:
     Amulet::OrderedMutex _public_mutex;
-    std::filesystem::path _directory;
-    bool _mcc;
-    std::mutex _regions_mutex;
-    std::map<std::pair<std::int64_t, std::int64_t>, std::shared_ptr<Amulet::AnvilRegion>> _regions;
-    bool destroyed = false;
+    const std::filesystem::path _directory;
+    const bool _mcc;
+    astd::mutex _mutex;
+    std::map<std::pair<std::int64_t, std::int64_t>, std::shared_ptr<Amulet::AnvilRegion>> _regions ASTD_GUARDED_BY(_mutex);
+    bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
 public:
     // Constructors
@@ -201,12 +204,12 @@ using JavaRawChunk = std::map<std::string, Amulet::NBT::NamedTag>;
 class AMULET_ANVIL_EXPORT AnvilDimension {
 private:
     Amulet::OrderedMutex _public_mutex;
-    std::filesystem::path _directory;
-    bool _mcc;
-    std::shared_mutex _layers_mutex;
-    std::map<std::string, std::shared_ptr<AnvilDimensionLayer>> _layers;
-    std::shared_ptr<AnvilDimensionLayer> _default_layer;
-    bool destroyed = false;
+    const std::filesystem::path _directory;
+    const bool _mcc;
+    astd::shared_mutex _mutex;
+    std::map<std::string, std::shared_ptr<AnvilDimensionLayer>> _layers ASTD_GUARDED_BY(_mutex);
+    std::shared_ptr<AnvilDimensionLayer> _default_layer ASTD_GUARDED_BY(_mutex);
+    bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
 public:
     template <TypedInputRange<std::string> layersT>
@@ -275,7 +278,7 @@ public:
     template <typename dataT>
     void set_chunk_data(std::int64_t cx, std::int64_t cz, const dataT& data_layers)
     {
-        std::shared_lock slock(_layers_mutex);
+        astd::shared_lock slock(_mutex);
         for (const auto& [layer_name, data] : data_layers) {
             static_assert(Ensure<
                 std::is_same_v<decltype(layer_name), const std::string>,
@@ -299,11 +302,15 @@ public:
                     }
                     // Switch to a unique lock to mutate _layers
                     slock.unlock();
-                    std::unique_lock ulock(_layers_mutex);
-                    // Create the layer.
-                    it = _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first;
+                    {
+                        astd::lock_guard ulock(_mutex);
+                        // Create the layer.
+                        it = _layers.emplace(
+                                        layer_name,
+                                        std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc))
+                                 .first;
+                    }
                     // Switch back to a shared lock
-                    ulock.unlock();
                     slock.lock();
                 } else {
                     error("Anvil layer contains characters not in the range a-z");

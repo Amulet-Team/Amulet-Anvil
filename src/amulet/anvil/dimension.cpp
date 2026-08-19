@@ -186,7 +186,7 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
 {
     // Lock parallel modifications
     // TODO: Some of this could be done in parallel.
-    std::lock_guard lock(_regions_mutex);
+    astd::lock_guard lock(_mutex);
     if (destroyed) {
         throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
     }
@@ -269,14 +269,14 @@ void AnvilDimensionLayer::compact()
 
 void AnvilDimensionLayer::destroy()
 {
-    std::lock_guard regions_lock(_regions_mutex);
+    astd::lock_guard regions_lock(_mutex);
     destroyed = true;
 
     // Destroy all region instances.
     for (auto& it : _regions) {
         auto& region = *it.second;
         auto& mutex = region.get_mutex();
-        std::lock_guard region_lock(mutex);
+        astd::lock_guard region_lock(mutex);
         region.destroy();
     }
     _regions.clear();
@@ -295,7 +295,7 @@ bool AnvilDimension::mcc() const { return _mcc; }
 
 std::vector<std::string> AnvilDimension::layer_names()
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     std::vector<std::string> layers;
     layers.reserve(_layers.size());
     for (const auto& node : _layers) {
@@ -311,13 +311,13 @@ AnvilDimension::~AnvilDimension()
 
 bool AnvilDimension::has_layer(const std::string& layer_name)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     return _layers.contains(layer_name);
 }
 
 std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string& layer_name, bool create)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     auto it = _layers.find(layer_name);
     if (it != _layers.end()) {
         return it->second;
@@ -344,7 +344,7 @@ bool AnvilDimension::has_chunk(std::int64_t cx, std::int64_t cz) const
 
 JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     JavaRawChunk chunk_data;
     for (const auto& [layer_name, layer_ptr] : _layers) {
         auto& layer = *layer_ptr;
@@ -365,7 +365,7 @@ JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimension::delete_chunk(std::int64_t cx, std::int64_t cz)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
         OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
@@ -375,7 +375,7 @@ void AnvilDimension::delete_chunk(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimension::compact()
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
         OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
@@ -385,14 +385,14 @@ void AnvilDimension::compact()
 
 void AnvilDimension::destroy()
 {
-    std::lock_guard layers_lock(_layers_mutex);
+    astd::lock_guard layers_lock(_mutex);
     destroyed = true;
 
     // Destroy all region instances.
     for (auto& it : _layers) {
         auto& layer = *it.second;
         auto& mutex = layer.get_mutex();
-        std::lock_guard layer_lock(mutex);
+        astd::lock_guard layer_lock(mutex);
         layer.destroy();
     }
     _layers.clear();
