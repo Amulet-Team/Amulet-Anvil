@@ -641,7 +641,7 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
     if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
         throw std::runtime_error("Failed writing location to region file " + path.string());
     }
-    if (!regionf.seekg(SectorSize - 4, std::ios::cur)) {
+    if (!regionf.seekp(SectorSize - 4, std::ios::cur)) {
         throw std::runtime_error("Failed seeking to timestamp table in region file " + path.string());
     }
     std::uint32_t t = static_cast<std::uint32_t>(std::time(NULL));
