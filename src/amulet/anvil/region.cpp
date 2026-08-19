@@ -595,8 +595,9 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
         }
 
         // Find how big the sector needs to be.
-        size_t data_size = data.size() + 4;
-        size_t sector_length = data_size;
+        size_t data_size = data.size();
+        size_t payload_size = data_size + 4;
+        size_t sector_length = payload_size;
         if (sector_length & 0xFFF) {
             sector_length = (sector_length | 0xFFF) + 1;
         }
@@ -621,7 +622,7 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
             throw std::runtime_error("Failed writing data to region file " + path.string());
         }
         // Pad to sector_length
-        size_t pad_size = sector_length - data_size;
+        size_t pad_size = sector_length - payload_size;
         if (pad_size) {
             if (!regionf.write(EmptyHeader.data(), pad_size)) {
                 throw std::runtime_error("Failed writing padding to region file " + path.string());
