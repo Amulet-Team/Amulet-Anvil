@@ -377,13 +377,13 @@ void AnvilRegion::Impl::_close_if_open()
 
 void AnvilRegion::Impl::close()
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     _close_if_open();
 }
 
 void AnvilRegion::Impl::destroy()
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     destroyed = true;
     _close_if_open();
     sector_manager = std::nullopt;
@@ -392,13 +392,13 @@ void AnvilRegion::Impl::destroy()
 
 bool AnvilRegion::Impl::is_destroyed()
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     return destroyed;
 }
 
 std::vector<std::pair<std::int64_t, std::int64_t>> AnvilRegion::Impl::get_coords()
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     std::vector<std::pair<std::int64_t, std::int64_t>> coords;
@@ -425,7 +425,7 @@ void AnvilRegion::Impl::validate_coord(std::int64_t cx, std::int64_t cz) const
 bool AnvilRegion::Impl::has_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     return chunk_locations.contains(std::make_pair(cx, cz));
@@ -523,7 +523,7 @@ static NamedTag decompress(unsigned char compression_type, const std::string_vie
 NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     auto it = chunk_locations.find(std::make_pair(cx, cz));
@@ -702,7 +702,7 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
         return;
     }
 
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     create_open_region_file_if_closed();
@@ -712,7 +712,7 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
 void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
@@ -725,7 +725,7 @@ void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
 
 void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
@@ -743,7 +743,7 @@ void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::in
 
 void AnvilRegion::Impl::compact()
 {
-    std::lock_guard lock(mutex);
+    astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
@@ -851,7 +851,7 @@ void AnvilRegion::Impl::compact()
 
 std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::get_file_closer()
 {
-    std::lock_guard closer_lock(file_closer_mutex);
+    astd::lock_guard closer_lock(file_closer_mutex);
     std::shared_ptr<AnvilRegion::FileCloser> file_closer = file_closer_ref.lock();
     if (!file_closer) {
         file_closer = std::make_shared<AnvilRegion::FileCloser>(shared_from_this());
@@ -993,7 +993,7 @@ AnvilRegion::FileCloser::FileCloser(std::shared_ptr<Impl> impl)
 AnvilRegion::FileCloser::~FileCloser()
 {
     auto& impl = *_impl;
-    std::lock_guard lock(impl.mutex);
+    astd::lock_guard lock(impl.mutex);
     if (impl.regionf.is_open()) {
         impl.regionf.close();
     }
