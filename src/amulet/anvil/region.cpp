@@ -274,8 +274,7 @@ void AnvilRegion::Impl::create_region_file()
     if (!regionf) {
         throw std::runtime_error("Could not open file " + path.string());
     }
-    regionf.write(EmptyHeader.data(), EmptyHeader.size());
-    if (!regionf) {
+    if (!regionf.write(EmptyHeader.data(), EmptyHeader.size())) {
         regionf.close();
         throw std::runtime_error("Failed writing to region file " + path.string());
     }
@@ -287,19 +286,25 @@ void AnvilRegion::Impl::open_region_file()
     if (!regionf) {
         throw std::runtime_error("Could not open file " + path.string());
     }
-    regionf.seekp(0, std::ios::end);
-    size_t file_size = regionf.tellp();
+    if (!regionf.seekp(0, std::ios::end)) {
+        regionf.close();
+        throw std::runtime_error("Failed seeking to end of region file " + path.string());
+    }
+    auto pos = regionf.tellp();
+    if (pos == std::fstream::pos_type(-1)) {
+        regionf.close();
+        throw std::runtime_error("Failed getting size of region file " + path.string());
+    }
+    size_t file_size = static_cast<size_t>(pos);
     if (file_size < SectorSize * 2) {
         // if the length of the region file is less than 8KiB extend it to 8KiB
-        regionf.write(EmptyHeader.data(), EmptyHeader.size() - file_size);
-        if (!regionf) {
+        if (!regionf.write(EmptyHeader.data(), EmptyHeader.size() - file_size)) {
             regionf.close();
             throw std::runtime_error("Failed writing to region file " + path.string());
         }
     } else if (file_size & 0xFFF) {
         // ensure the file is a multiple of 4096 bytes
-        regionf.write(EmptyHeader.data(), (file_size | 0xFFF) + 1 - file_size);
-        if (!regionf) {
+        if (!regionf.write(EmptyHeader.data(), (file_size | 0xFFF) + 1 - file_size)) {
             regionf.close();
             throw std::runtime_error("Failed writing to region file " + path.string());
         }
@@ -337,9 +342,13 @@ void AnvilRegion::Impl::read_file_header()
             open_region_file();
         }
         // Read the location table header.
-        regionf.seekg(0);
+        if (!regionf.seekg(0)) {
+            throw std::runtime_error("Failed seeking to start of region file " + path.string());
+        }
         std::vector<std::uint32_t> location_table(1024);
-        regionf.read(reinterpret_cast<char*>(location_table.data()), 4096);
+        if (!regionf.read(reinterpret_cast<char*>(location_table.data()), 4096)) {
+            throw std::runtime_error("Failed reading location table from region file " + path.string());
+        }
         // Convert from big endian to native endianness
         for (auto& v : location_table) {
             big_endian_swap(v);
@@ -598,18 +607,25 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
         }
         chunk_locations.emplace(std::make_pair(cx, cz), sector);
         // Seek to the sector to write to
-        regionf.seekp(sector.start);
+        if (!regionf.seekp(sector.start)) {
+            throw std::runtime_error("Failed seeking to sector in region file " + path.string());
+        }
         // Write the size value
         std::uint32_t data_size_buffer = static_cast<std::uint32_t>(data_size);
         big_endian_swap(data_size_buffer);
-        regionf.write(reinterpret_cast<char*>(&data_size_buffer), 4);
+        if (!regionf.write(reinterpret_cast<char*>(&data_size_buffer), 4)) {
+            throw std::runtime_error("Failed writing size to region file " + path.string());
+        }
         // Write the data
-        regionf.write(data.data(), data.size());
+        if (!regionf.write(data.data(), data.size())) {
+            throw std::runtime_error("Failed writing data to region file " + path.string());
+        }
         // Pad to sector_length
         size_t pad_size = sector_length - data_size;
         if (pad_size) {
-            std::string padding(pad_size, 0);
-            regionf.write(padding.data(), pad_size);
+            if (!regionf.write(EmptyHeader.data(), pad_size)) {
+                throw std::runtime_error("Failed writing padding to region file " + path.string());
+            }
         }
         // Create the location value
         location = static_cast<std::uint32_t>((sector.start >> 4) + (sector_length >> 12));
@@ -617,12 +633,20 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
     }
 
     // Write header data
-    regionf.seekp(4 * (cx - rx * 32 + (cz - rz * 32) * 32));
-    regionf.write(reinterpret_cast<char*>(&location), 4);
-    regionf.seekg(SectorSize - 4, std::ios::cur);
+    if (!regionf.seekp(4 * (cx - rx * 32 + (cz - rz * 32) * 32))) {
+        throw std::runtime_error("Failed seeking to location table in region file " + path.string());
+    }
+    if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
+        throw std::runtime_error("Failed writing location to region file " + path.string());
+    }
+    if (!regionf.seekg(SectorSize - 4, std::ios::cur)) {
+        throw std::runtime_error("Failed seeking to timestamp table in region file " + path.string());
+    }
     std::uint32_t t = static_cast<std::uint32_t>(std::time(NULL));
     big_endian_swap(t);
-    regionf.write(reinterpret_cast<char*>(&t), 4);
+    if (!regionf.write(reinterpret_cast<char*>(&t), 4)) {
+        throw std::runtime_error("Failed writing timestamp to region file " + path.string());
+    }
 
     // Only do this after updating the header so that the file is always in a valid state.
     if (old_sector) {
@@ -781,19 +805,31 @@ void AnvilRegion::Impl::compact()
 
             // Read in the data
             std::string data(sector.length(), 0);
-            regionf.seekg(sector.start);
-            regionf.read(data.data(), data.size());
+            if (!regionf.seekg(sector.start)) {
+                throw std::runtime_error("Failed seeking to data in region file " + path.string());
+            }
+            if (!regionf.read(data.data(), data.size())) {
+                throw std::runtime_error("Failed reading data from region file " + path.string());
+            }
 
             // Reserve and write the data to the new sector
             sector_manager->reserve(new_sector);
-            regionf.seekp(new_sector.start);
-            regionf.write(data.data(), data.size());
+            if (!regionf.seekp(new_sector.start)) {
+                throw std::runtime_error("Failed seeking to new sector in region file " + path.string());
+            }
+            if (!regionf.write(data.data(), data.size())) {
+                throw std::runtime_error("Failed writing data to region file " + path.string());
+            }
 
             // Update the index
             std::uint32_t location = static_cast<std::uint32_t>((new_sector.start >> 4) + (new_sector.length() >> 12));
             big_endian_swap(location);
-            regionf.seekp(header_index);
-            regionf.write(reinterpret_cast<char*>(&location), 4);
+            if (!regionf.seekp(header_index)) {
+                throw std::runtime_error("Failed seeking to header index in region file " + path.string());
+            }
+            if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
+                throw std::runtime_error("Failed writing location to region file " + path.string());
+            }
 
             // Update internal state
             chunk_locations[chunk_coordinate] = new_sector;
