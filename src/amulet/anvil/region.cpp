@@ -584,6 +584,9 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
         // Write the new chunk data
         char format_byte = 0;
         if (data.size() + 4 > MaxRegionSize) {
+            if (!mcc) {
+                throw std::runtime_error("mcc support is not enabled. The caller should check this.");
+            }
             // save externally (if mcc files are not supported the check at the top will filter large files out)
             mcc_overwritten = true;
             std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
