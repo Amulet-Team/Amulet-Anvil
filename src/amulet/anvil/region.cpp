@@ -546,7 +546,7 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         }
         std::stringstream mccbuffer;
         mccbuffer << mccf.rdbuf();
-        return decompress(buffer[0] & 127, mccbuffer.str());
+        return decompress(buffer[0] & 127, mccbuffer.view());
     } else {
         return decompress(buffer[0], std::string_view(buffer).substr(1));
     }
