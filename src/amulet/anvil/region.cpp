@@ -471,7 +471,10 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
         case COMPRESSION_METHOD_LZ4: {
             size_t buf_index = dst.size();
             dst.resize(dst.size() + original_length);
-            LZ4_decompress_safe(&src[index], &dst[buf_index], compressed_length, original_length);
+            auto decompressed_length = LZ4_decompress_safe(&src[index], &dst[buf_index], compressed_length, original_length);
+            if (decompressed_length != original_length) {
+                throw std::invalid_argument("LZ4 compressed block is corrupted.");
+            }
             index += compressed_length;
             break;
         }
