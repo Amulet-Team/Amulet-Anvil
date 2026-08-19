@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cstdint>
@@ -47,18 +48,20 @@ static void big_endian_swap(T& value)
     }
 }
 
-static const std::uint64_t SectorSize = 0x1000;
-static const std::uint64_t MaxRegionSize = SectorSize * 255; // The maximum size data in the region file can be
+static constexpr std::uint64_t SectorSize = 0x1000;
+static constexpr std::uint64_t MaxRegionSize = SectorSize * 255; // The maximum size data in the region file can be
+static constexpr std::array<char, SectorSize * 2> EmptyHeader { };
 
-static const std::regex region_regex(R"(^r\.(\-?\d+)\.(\-?\d+)\.mca$)");
-
-template <typename K, typename V>
-class LRICache {
+class FileCloserCache {
 private:
+    using WeakImpl = std::weak_ptr<AnvilRegion::Impl>;
+    using SharedCloser = std::shared_ptr<AnvilRegion::FileCloser>;
+    using Pair = std::pair<WeakImpl, SharedCloser>;
+
     astd::mutex _mutex;
-    size_t _max_size ASTD_GUARDED_BY(_mutex);
-    std::list<std::pair<K, V>> _values ASTD_GUARDED_BY(_mutex);
-    std::map<K, typename std::list<std::pair<K, V>>::iterator> _map ASTD_GUARDED_BY(_mutex);
+    const size_t _max_size;
+    std::list<Pair> _values ASTD_GUARDED_BY(_mutex);
+    std::map<WeakImpl, typename std::list<Pair>::iterator, std::owner_less<WeakImpl>> _map ASTD_GUARDED_BY(_mutex);
 
     void remove_extra() ASTD_REQUIRES_UNIQUE(_mutex)
     {
@@ -69,17 +72,17 @@ private:
     }
 
 public:
-    LRICache(size_t max_size)
+    FileCloserCache(size_t max_size)
         : _max_size(max_size) { };
 
     // Add an item.
-    void add(const K& k, const V& v) ASTD_EXCLUDES(_mutex)
+    void add(WeakImpl k, SharedCloser v) ASTD_EXCLUDES(_mutex)
     {
         astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
         if (it == _map.end()) {
             // Create and insert the value
-            _values.emplace_back(k, v);
+            _values.emplace_back(k, std::move(v));
             _map.emplace(k, --_values.end());
             remove_extra();
         } else {
@@ -89,7 +92,7 @@ public:
     };
 
     // Remove an item.
-    void remove(const K& k) ASTD_EXCLUDES(_mutex)
+    void remove(WeakImpl k) ASTD_EXCLUDES(_mutex)
     {
         astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
@@ -100,10 +103,11 @@ public:
     }
 };
 
-static LRICache<size_t, std::shared_ptr<AnvilRegion::FileCloser>> region_file_cache(64);
+static FileCloserCache region_file_cache(64);
 
 std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& filename)
 {
+    static const std::regex region_regex(R"(^r\.(\-?\d+)\.(\-?\d+)\.mca$)");
     std::smatch match;
     if (!std::regex_search(filename, match, region_regex)) {
         throw std::invalid_argument("Region filename is invalid.");
@@ -111,105 +115,201 @@ std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& f
     return std::make_pair(std::stoll(match[1]), std::stoll(match[2]));
 }
 
-// Constructors.
-AnvilRegion::AnvilRegion(
-    const std::filesystem::path& directory,
-    const std::string& file_name,
+class AnvilRegion::Impl : public std::enable_shared_from_this<AnvilRegion::Impl> {
+public:
+    // The directory the region file is in.
+    const std::filesystem::path dir;
+    const std::filesystem::path path;
+
+    // The region coordinates.
+    const std::int64_t rx;
+    const std::int64_t rz;
+
+    // Is support for .mcc files enabled.
+    const bool mcc;
+
+    // This mutex must be acquired to access the following attributes.
+    astd::recursive_mutex mutex;
+
+    // The region file handle
+    std::fstream regionf ASTD_GUARDED_BY(mutex);
+
+    // A class to track which sectors are reserved.
+    // Null if it has not been synchronised with the file.
+    std::optional<SectorManager> sector_manager ASTD_GUARDED_BY(mutex);
+
+    // A map from the chunk coordinate to the location on disk
+    std::map<std::pair<std::int64_t, std::int64_t>, Sector> chunk_locations ASTD_GUARDED_BY(mutex);
+
+    // Has the region been marked as destroyed.
+    bool destroyed ASTD_GUARDED_BY(mutex) = false;
+
+    // Region file closer
+    astd::mutex file_closer_mutex;
+    std::weak_ptr<AnvilRegion::FileCloser> file_closer_ref ASTD_GUARDED_BY(file_closer_mutex);
+
+    Impl(
+        std::filesystem::path dir,
+        std::filesystem::path path,
+        std::int64_t rx,
+        std::int64_t rz,
+        const bool mcc);
+
+    // Load data from the region file if it exists.
+    void read_file_header() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Create the region file.
+    void create_region_file() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Open the region file and fix any size issues.
+    void open_region_file() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Create or open the region file if it is closed.
+    void create_open_region_file_if_closed() ASTD_REQUIRES_UNIQUE(mutex);
+
+    void validate_coord(std::int64_t cx, std::int64_t cz) const;
+
+    // Set chunk data.
+    // Caller must ensure the file is open.
+    template <typename T>
+    void set_data(std::int64_t cx, std::int64_t cz, T data) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Close the file object.
+    // This is automatically called when the instance is destroyed but may be called earlier.
+    void _close() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Close the file object if open.
+    // This is automatically called when the instance is destroyed but may be called earlier.
+    void _close_if_open() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Get the coordinates of all values in the region file.
+    // Coordinates are in world space.
+    // External Read:SharedReadWrite lock required.
+    // External Read:SharedReadOnly lock optional.
+    std::vector<std::pair<std::int64_t, std::int64_t>> get_coords() ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Is the coordinate in the region.
+    // This returns true even if there is no value for the coordinate.
+    // Coordinates are in world space.
+    // Thread safe.
+    bool contains(std::int64_t cx, std::int64_t cz) const ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Is there a value stored for this coordinate.
+    // Coordinates are in world space.
+    // External Read:SharedReadWrite lock required.
+    // External Read:SharedReadOnly lock optional.
+    bool has_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Get the value for this coordinate.
+    // Coordinates are in world space.
+    // External Read:SharedReadWrite lock required.
+    Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // AMULET_ANVIL_EXPORT std::vector<std::optional<Amulet::NBT::NamedTag>> get_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
+
+    // Set the value for this coordinate.
+    // Coordinates are in world space.
+    // External ReadWrite:SharedReadWrite lock required.
+    void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag) ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // AMULET_ANVIL_EXPORT void set_batch(std::vector<std::tuple<std::int64_t, std::int64_t, Amulet::NBT::NamedTag>>& batch);
+
+    // Delete the chunk data.
+    // Coordinates are in world space.
+    // External ReadWrite:SharedReadWrite lock required.
+    void delete_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Delete multiple chunk's data.
+    // Coordinates are in world space.
+    // External ReadWrite:SharedReadWrite lock required.
+    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Compact the region file.
+    // Defragments the file and deletes unused space.
+    // If there are no chunks remaining in the region file it will be deleted.
+    // External ReadWrite:SharedReadWrite lock required.
+    void compact() ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Close the file object if open.
+    // This is automatically called when the instance is destroyed but may be called earlier.
+    // Thread safe.
+    void close() ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Destroy the instance.
+    // Calls made after this will fail.
+    // This may only be called by the owner of the instance.
+    // External ReadWrite:Unique lock required.
+    void destroy() ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Has the instance been destroyed.
+    // If this is false, other calls will fail.
+    // External Read:SharedReadWrite lock required.
+    bool is_destroyed() ASTD_EXCLUDES(mutex, file_closer_mutex);
+
+    // Get the object responsible for closing the region file.
+    // When this object is deleted it will close the region file
+    // This means that holding a reference to this will delay when the region file is closed.
+    // The region file may still be closed manually before this object is deleted.
+    // Thread safe.
+    std::shared_ptr<FileCloser> get_file_closer() ASTD_EXCLUDES(mutex, file_closer_mutex);
+};
+
+AnvilRegion::Impl::Impl(
+    std::filesystem::path dir,
+    std::filesystem::path path,
     std::int64_t rx,
     std::int64_t rz,
-    bool mcc)
-    : _dir(directory)
-    , _path(directory / file_name)
-    , _rx(rx)
-    , _rz(rz)
-    , _mcc(mcc)
-    , _shared(std::make_shared<AnvilRegion::Shared>())
+    const bool mcc)
+    : dir(std::move(dir))
+    , path(std::move(path))
+    , rx(rx)
+    , rz(rz)
+    , mcc(mcc)
 {
 }
 
-AnvilRegion::AnvilRegion(
-    const std::filesystem::path& directory,
-    const std::string& file_name,
-    const std::pair<std::int64_t, std::int64_t>& region_coordinate,
-    bool mcc)
-    : AnvilRegion(
-          directory,
-          file_name,
-          region_coordinate.first,
-          region_coordinate.second,
-          mcc)
+void AnvilRegion::Impl::create_region_file()
 {
-}
-
-AnvilRegion::AnvilRegion(
-    const std::filesystem::path& directory,
-    std::int64_t rx,
-    std::int64_t rz,
-    bool mcc)
-    : AnvilRegion(
-          directory,
-          "r." + std::to_string(rx) + "." + std::to_string(rz) + ".mca",
-          rx, rz, mcc)
-{
-}
-
-AnvilRegion::AnvilRegion(std::filesystem::path path, bool mcc)
-    : AnvilRegion(
-          path.parent_path(),
-          path.filename().string(),
-          parse_region_filename(path.filename().string()),
-          mcc)
-{
-}
-
-AnvilRegion::~AnvilRegion()
-{
-    destroy();
-}
-
-Amulet::OrderedMutex& AnvilRegion::get_mutex() { return _public_mutex; }
-
-std::filesystem::path AnvilRegion::path() const { return _path; }
-
-std::int64_t AnvilRegion::rx() const { return _rx; }
-
-std::int64_t AnvilRegion::rz() const { return _rz; }
-
-void AnvilRegion::create_region_file()
-{
-    auto& regionf = _shared->regionf;
-    regionf.open(_path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+    regionf.open(path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
     if (!regionf) {
-        throw std::runtime_error("Could not open file " + _path.string());
+        throw std::runtime_error("Could not open file " + path.string());
     }
-    std::string padding(SectorSize * 2, 0);
-    regionf.write(padding.data(), padding.size());
+    regionf.write(EmptyHeader.data(), EmptyHeader.size());
+    if (!regionf) {
+        regionf.close();
+        throw std::runtime_error("Failed writing to region file " + path.string());
+    }
 }
 
-void AnvilRegion::open_region_file()
+void AnvilRegion::Impl::open_region_file()
 {
-    auto& regionf = _shared->regionf;
-    regionf.open(_path, std::ios::in | std::ios::out | std::ios::binary);
+    regionf.open(path, std::ios::in | std::ios::out | std::ios::binary);
     if (!regionf) {
-        throw std::runtime_error("Could not open file " + _path.string());
+        throw std::runtime_error("Could not open file " + path.string());
     }
     regionf.seekp(0, std::ios::end);
     size_t file_size = regionf.tellp();
     if (file_size < SectorSize * 2) {
         // if the length of the region file is less than 8KiB extend it to 8KiB
-        std::string padding(SectorSize * 2 - file_size, 0);
-        regionf.write(padding.data(), padding.size());
+        regionf.write(EmptyHeader.data(), EmptyHeader.size() - file_size);
+        if (!regionf) {
+            regionf.close();
+            throw std::runtime_error("Failed writing to region file " + path.string());
+        }
     } else if (file_size & 0xFFF) {
         // ensure the file is a multiple of 4096 bytes
-        std::string padding((file_size | 0xFFF) + 1 - file_size, 0);
-        regionf.write(padding.data(), padding.size());
+        regionf.write(EmptyHeader.data(), (file_size | 0xFFF) + 1 - file_size);
+        if (!regionf) {
+            regionf.close();
+            throw std::runtime_error("Failed writing to region file " + path.string());
+        }
     }
 }
 
-void AnvilRegion::create_open_region_file_if_closed()
+void AnvilRegion::Impl::create_open_region_file_if_closed()
 {
-    if (!_shared->regionf.is_open()) {
-        if (std::filesystem::is_regular_file(_path)) {
+    if (!regionf.is_open()) {
+        if (std::filesystem::is_regular_file(path)) {
             open_region_file();
         } else {
             create_region_file();
@@ -217,9 +317,9 @@ void AnvilRegion::create_open_region_file_if_closed()
     }
 }
 
-void AnvilRegion::read_file_header()
+void AnvilRegion::Impl::read_file_header()
 {
-    if (_sector_manager) {
+    if (sector_manager) {
         // Already loaded.
         return;
     }
@@ -229,11 +329,10 @@ void AnvilRegion::read_file_header()
     }
 
     // Load the region data
-    _sector_manager = SectorManager(0, SectorSize * 2);
-    _sector_manager->reserve(Sector(0, SectorSize * 2));
+    sector_manager = SectorManager(0, SectorSize * 2);
+    sector_manager->reserve(Sector(0, SectorSize * 2));
 
-    if (std::filesystem::is_regular_file(_path)) {
-        auto& regionf = _shared->regionf;
+    if (std::filesystem::is_regular_file(path)) {
         if (!regionf.is_open()) {
             open_region_file();
         }
@@ -252,82 +351,82 @@ void AnvilRegion::read_file_header()
                     size_t sector_offset = (sector_data >> 8) * SectorSize;
                     size_t sector_size = (sector_data & 0xFF) * SectorSize;
                     Sector sector(sector_offset, sector_offset + sector_size);
-                    _sector_manager->reserve(sector);
-                    _chunk_locations.emplace(std::make_pair(cx + _rx * 32, cz + _rz * 32), sector);
+                    sector_manager->reserve(sector);
+                    chunk_locations.emplace(std::make_pair(cx + rx * 32, cz + rz * 32), sector);
                 }
             }
         }
     }
 }
 
-void AnvilRegion::_close()
+void AnvilRegion::Impl::_close()
 {
-    _shared->regionf.close();
-    region_file_cache.remove(reinterpret_cast<size_t>(this));
+    regionf.close();
+    region_file_cache.remove(weak_from_this());
 }
 
-void AnvilRegion::_close_if_open()
+void AnvilRegion::Impl::_close_if_open()
 {
-    if (_shared->regionf.is_open()) {
-        _close();
-    } else {
-        region_file_cache.remove(reinterpret_cast<size_t>(this));
+    if (regionf.is_open()) {
+        regionf.close();
     }
+    region_file_cache.remove(weak_from_this());
 }
 
-void AnvilRegion::close()
+void AnvilRegion::Impl::close()
 {
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     _close_if_open();
 }
 
-void AnvilRegion::destroy()
+void AnvilRegion::Impl::destroy()
 {
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     destroyed = true;
     _close_if_open();
-    _sector_manager = std::nullopt;
-    _chunk_locations.clear();
+    sector_manager = std::nullopt;
+    chunk_locations.clear();
 }
 
-bool AnvilRegion::is_destroyed()
+bool AnvilRegion::Impl::is_destroyed()
 {
+    std::lock_guard lock(mutex);
     return destroyed;
 }
 
-std::vector<std::pair<std::int64_t, std::int64_t>> AnvilRegion::get_coords()
+std::vector<std::pair<std::int64_t, std::int64_t>> AnvilRegion::Impl::get_coords()
 {
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     std::vector<std::pair<std::int64_t, std::int64_t>> coords;
-    coords.reserve(_chunk_locations.size());
-    for (const auto& it : _chunk_locations) {
+    coords.reserve(chunk_locations.size());
+    for (const auto& it : chunk_locations) {
         coords.push_back(it.first);
     }
     return coords;
 }
 
-bool AnvilRegion::contains(std::int64_t cx, std::int64_t cz) const
+bool AnvilRegion::Impl::contains(std::int64_t cx, std::int64_t cz) const
 {
-    return _rx * 32 <= cx && cx < (_rx + 1) * 32 && _rz * 32 <= cz && cz < (_rz + 1) * 32;
+    return rx * 32 <= cx && cx < (rx + 1) * 32 && rz * 32 <= cz && cz < (rz + 1) * 32;
 }
 
-void AnvilRegion::validate_coord(std::int64_t cx, std::int64_t cz) const
+void AnvilRegion::Impl::validate_coord(std::int64_t cx, std::int64_t cz) const
 {
     if (!contains(cx, cz)) {
         throw std::invalid_argument(
-            "Chunk coordinate " + std::to_string(cx) + ", " + std::to_string(cz) + " is not in region " + std::to_string(_rx) + ", " + std::to_string(_rz));
+            "Chunk coordinate " + std::to_string(cx) + ", " + std::to_string(cz) + " is not in region " + std::to_string(rx) + ", " + std::to_string(rz));
     }
 }
 
-bool AnvilRegion::has_value(std::int64_t cx, std::int64_t cz)
+bool AnvilRegion::Impl::has_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
-    return _chunk_locations.contains(std::make_pair(cx, cz));
+    return chunk_locations.contains(std::make_pair(cx, cz));
 }
 
 static const std::string LZ4_MAGIC = "LZ4Block";
@@ -406,18 +505,17 @@ static NamedTag decompress(char compression_type, const std::string_view& data)
     }
 }
 
-NamedTag AnvilRegion::get_value(std::int64_t cx, std::int64_t cz)
+NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
-    auto it = _chunk_locations.find(std::make_pair(cx, cz));
-    if (it == _chunk_locations.end()) {
+    auto it = chunk_locations.find(std::make_pair(cx, cz));
+    if (it == chunk_locations.end()) {
         throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     create_open_region_file_if_closed();
-    auto& regionf = _shared->regionf;
     if (!regionf.seekg(it->second.start)) {
         throw std::runtime_error("Failed seeking.");
     }
@@ -435,9 +533,9 @@ NamedTag AnvilRegion::get_value(std::int64_t cx, std::int64_t cz)
         throw std::runtime_error("Failed reading buffer.");
     }
 
-    if (_mcc && buffer[0] & 128) {
+    if (mcc && buffer[0] & 128) {
         // mcc files are supported and external bit is set.
-        std::filesystem::path mcc_path = _dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
+        std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
         std::ifstream mccf(mcc_path, std::ios::in | std::ios::binary);
         if (!mccf) {
             throw std::runtime_error("Could not open file " + mcc_path.string());
@@ -451,15 +549,14 @@ NamedTag AnvilRegion::get_value(std::int64_t cx, std::int64_t cz)
 }
 
 template <typename T>
-void AnvilRegion::_set_data(std::int64_t cx, std::int64_t cz, T data)
+void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
 {
-    auto& regionf = _shared->regionf;
     // Find the old sector
     std::optional<Sector> old_sector;
-    auto old_sector_it = _chunk_locations.find(std::make_pair(cx, cz));
-    if (old_sector_it != _chunk_locations.end()) {
+    auto old_sector_it = chunk_locations.find(std::make_pair(cx, cz));
+    if (old_sector_it != chunk_locations.end()) {
         old_sector = old_sector_it->second;
-        _chunk_locations.erase(old_sector_it);
+        chunk_locations.erase(old_sector_it);
     }
 
     bool mcc_overwritten = false;
@@ -471,7 +568,7 @@ void AnvilRegion::_set_data(std::int64_t cx, std::int64_t cz, T data)
         if (data.size() + 4 > MaxRegionSize) {
             // save externally (if mcc files are not supported the check at the top will filter large files out)
             mcc_overwritten = true;
-            std::filesystem::path mcc_path = _dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
+            std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
             std::ofstream mccf(mcc_path, std::ios::out | std::ios::binary | std::ios::trunc);
             if (!mccf) {
                 throw std::runtime_error("Could not open file " + mcc_path.string());
@@ -488,11 +585,11 @@ void AnvilRegion::_set_data(std::int64_t cx, std::int64_t cz, T data)
             sector_length = (sector_length | 0xFFF) + 1;
         }
         // Reserve a sector large enough to fit the data.
-        auto sector = _sector_manager->reserve_space(sector_length);
+        auto sector = sector_manager->reserve_space(sector_length);
         if (sector.start & 0xFFF) {
             throw std::runtime_error("Sector size is not a multiple of 0x1000.");
         }
-        _chunk_locations.emplace(std::make_pair(cx, cz), sector);
+        chunk_locations.emplace(std::make_pair(cx, cz), sector);
         // Seek to the sector to write to
         regionf.seekp(sector.start);
         // Write the size value
@@ -513,7 +610,7 @@ void AnvilRegion::_set_data(std::int64_t cx, std::int64_t cz, T data)
     }
 
     // Write header data
-    regionf.seekp(4 * (cx - _rx * 32 + (cz - _rz * 32) * 32));
+    regionf.seekp(4 * (cx - rx * 32 + (cz - rz * 32) * 32));
     regionf.write(reinterpret_cast<char*>(&location), 4);
     regionf.seekg(SectorSize - 4, std::ios::cur);
     std::uint32_t t = static_cast<std::uint32_t>(std::time(NULL));
@@ -522,19 +619,19 @@ void AnvilRegion::_set_data(std::int64_t cx, std::int64_t cz, T data)
 
     // Only do this after updating the header so that the file is always in a valid state.
     if (old_sector) {
-        if (_mcc && !mcc_overwritten) {
+        if (mcc && !mcc_overwritten) {
             // Delete the old external mcc file
-            std::filesystem::path mcc_path = _dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
+            std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
             if (std::filesystem::is_regular_file(mcc_path)) {
                 std::filesystem::remove(mcc_path);
             }
         }
         // Free the old sector
-        _sector_manager->free(*old_sector);
+        sector_manager->free(*old_sector);
     }
 }
 
-void AnvilRegion::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& tag)
+void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& tag)
 {
     validate_coord(cx, cz);
     // Encode the tag
@@ -553,7 +650,7 @@ void AnvilRegion::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& ta
     // Compress
     zlib::compress_zlib(bnbt, data);
 
-    if (!_mcc && data.size() + 4 > MaxRegionSize) {
+    if (!mcc && data.size() + 4 > MaxRegionSize) {
         // Skip saving large chunks if mcc files are not enabled.
         Amulet::warning(
             "Could not save data to chunk "
@@ -561,36 +658,36 @@ void AnvilRegion::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& ta
             + ", "
             + std::to_string(cz)
             + " in region file "
-            + _path.string()
+            + path.string()
             + " because it was too large.");
         return;
     }
 
-    std::lock_guard lock(_shared->mutex);
+    std::lock_guard lock(mutex);
     auto closer = get_file_closer();
     read_file_header();
     create_open_region_file_if_closed();
-    _set_data<std::string_view>(cx, cz, data);
+    set_data<std::string_view>(cx, cz, data);
 }
 
-void AnvilRegion::delete_value(std::int64_t cx, std::int64_t cz)
+void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    std::lock_guard lock(_shared->mutex);
-    if (!std::filesystem::is_regular_file(_path)) {
+    std::lock_guard lock(mutex);
+    if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
     auto closer = get_file_closer();
     read_file_header();
     create_open_region_file_if_closed();
-    _set_data<std::nullopt_t>(cx, cz, std::nullopt);
+    set_data<std::nullopt_t>(cx, cz, std::nullopt);
 }
 
-void AnvilRegion::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
+void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
 {
-    std::lock_guard lock(_shared->mutex);
-    if (!std::filesystem::is_regular_file(_path)) {
+    std::lock_guard lock(mutex);
+    if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
@@ -600,25 +697,25 @@ void AnvilRegion::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>
 
     for (const auto& [cx, cz] : coords) {
         if (contains(cx, cz)) {
-            _set_data<std::nullopt_t>(cx, cz, std::nullopt);
+            set_data<std::nullopt_t>(cx, cz, std::nullopt);
         }
     }
 }
 
-void AnvilRegion::compact()
+void AnvilRegion::Impl::compact()
 {
-    std::lock_guard lock(_shared->mutex);
-    if (!std::filesystem::is_regular_file(_path)) {
+    std::lock_guard lock(mutex);
+    if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
 
     auto closer = get_file_closer();
     read_file_header();
-    if (_chunk_locations.empty()) {
+    if (chunk_locations.empty()) {
         // No chunks in the region file. Delete it.
         _close_if_open();
-        std::filesystem::remove(_path);
+        std::filesystem::remove(path);
         return;
     }
 
@@ -638,9 +735,9 @@ void AnvilRegion::compact()
         std::tuple<size_t, std::pair<std::int64_t, std::int64_t>, Sector>,
         SectorStartSort>
         chunk_sectors;
-    for (const auto& [coord, sector] : _chunk_locations) {
+    for (const auto& [coord, sector] : chunk_locations) {
         chunk_sectors.emplace(
-            4 * (coord.first - _rx * 32 + (coord.second - _rz * 32) * 32),
+            4 * (coord.first - rx * 32 + (coord.second - rz * 32) * 32),
             std::make_pair(coord.first, coord.second),
             sector);
     }
@@ -650,7 +747,6 @@ void AnvilRegion::compact()
     size_t file_end = std::get<2>(*chunk_sectors.rbegin()).stop;
 
     create_open_region_file_if_closed();
-    auto& regionf = _shared->regionf;
 
     while (!chunk_sectors.empty()) {
         // While there are remaining sectors, get the first sector.
@@ -682,7 +778,7 @@ void AnvilRegion::compact()
             regionf.read(data.data(), data.size());
 
             // Reserve and write the data to the new sector
-            _sector_manager->reserve(new_sector);
+            sector_manager->reserve(new_sector);
             regionf.seekp(new_sector.start);
             regionf.write(data.data(), data.size());
 
@@ -693,37 +789,164 @@ void AnvilRegion::compact()
             regionf.write(reinterpret_cast<char*>(&location), 4);
 
             // Update internal state
-            _chunk_locations[chunk_coordinate] = new_sector;
-            _sector_manager->free(sector);
+            chunk_locations[chunk_coordinate] = new_sector;
+            sector_manager->free(sector);
         }
     }
     _close();
     // Delete any unused data at the end.
-    std::filesystem::resize_file(_path, file_position);
+    std::filesystem::resize_file(path, file_position);
+}
+
+std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::get_file_closer()
+{
+    std::lock_guard closer_lock(file_closer_mutex);
+    std::shared_ptr<AnvilRegion::FileCloser> file_closer = file_closer_ref.lock();
+    if (!file_closer) {
+        file_closer = std::make_shared<AnvilRegion::FileCloser>(shared_from_this());
+        file_closer_ref = file_closer;
+    }
+    region_file_cache.add(weak_from_this(), file_closer);
+    return file_closer;
+}
+
+// Constructors.
+AnvilRegion::AnvilRegion(
+    const std::filesystem::path& directory,
+    const std::string& file_name,
+    std::int64_t rx,
+    std::int64_t rz,
+    bool mcc)
+    : _impl(std::make_shared<AnvilRegion::Impl>(
+          directory,
+          directory / file_name,
+          rx,
+          rz,
+          mcc))
+{
+}
+
+AnvilRegion::AnvilRegion(
+    const std::filesystem::path& directory,
+    const std::string& file_name,
+    const std::pair<std::int64_t, std::int64_t>& region_coordinate,
+    bool mcc)
+    : AnvilRegion(
+          directory,
+          file_name,
+          region_coordinate.first,
+          region_coordinate.second,
+          mcc)
+{
+}
+
+AnvilRegion::AnvilRegion(
+    const std::filesystem::path& directory,
+    std::int64_t rx,
+    std::int64_t rz,
+    bool mcc)
+    : AnvilRegion(
+          directory,
+          "r." + std::to_string(rx) + "." + std::to_string(rz) + ".mca",
+          rx, rz, mcc)
+{
+}
+
+AnvilRegion::AnvilRegion(std::filesystem::path path, bool mcc)
+    : AnvilRegion(
+          path.parent_path(),
+          path.filename().string(),
+          parse_region_filename(path.filename().string()),
+          mcc)
+{
+}
+
+AnvilRegion::~AnvilRegion()
+{
+    destroy();
+}
+
+Amulet::OrderedMutex& AnvilRegion::get_mutex() { return _public_mutex; }
+
+std::filesystem::path AnvilRegion::path() const { return _impl->path; }
+
+std::int64_t AnvilRegion::rx() const { return _impl->rx; }
+
+std::int64_t AnvilRegion::rz() const { return _impl->rz; }
+
+void AnvilRegion::close()
+{
+    _impl->close();
+}
+
+void AnvilRegion::destroy()
+{
+    _impl->destroy();
+}
+
+bool AnvilRegion::is_destroyed()
+{
+    return _impl->is_destroyed();
+}
+
+std::vector<std::pair<std::int64_t, std::int64_t>> AnvilRegion::get_coords()
+{
+    return _impl->get_coords();
+}
+
+bool AnvilRegion::contains(std::int64_t cx, std::int64_t cz) const
+{
+    return _impl->contains(cx, cz);
+}
+
+bool AnvilRegion::has_value(std::int64_t cx, std::int64_t cz)
+{
+    return _impl->has_value(cx, cz);
+}
+
+NamedTag AnvilRegion::get_value(std::int64_t cx, std::int64_t cz)
+{
+    return _impl->get_value(cx, cz);
+}
+
+void AnvilRegion::set_value(std::int64_t cx, std::int64_t cz, const NamedTag& tag)
+{
+    _impl->set_value(cx, cz, tag);
+}
+
+void AnvilRegion::delete_value(std::int64_t cx, std::int64_t cz)
+{
+    _impl->delete_value(cx, cz);
+}
+
+void AnvilRegion::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
+{
+    _impl->delete_batch(coords);
+}
+
+void AnvilRegion::compact()
+{
+    _impl->compact();
 }
 
 std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::get_file_closer()
 {
-    std::lock_guard closer_lock(_file_closer_mutex);
-    std::shared_ptr<AnvilRegion::FileCloser> closer = _closer.lock();
-    if (!closer) {
-        closer = std::make_shared<AnvilRegion::FileCloser>(_shared);
-        _closer = closer;
-    }
-    region_file_cache.add(reinterpret_cast<size_t>(this), closer);
-    return closer;
+    return _impl->get_file_closer();
 }
 
-AnvilRegion::FileCloser::FileCloser(std::shared_ptr<Shared> shared)
-    : _shared(std::move(shared))
+AnvilRegion::FileCloser::FileCloser(std::shared_ptr<Impl> impl)
+    : _impl(std::move(impl))
 {
 }
+
 AnvilRegion::FileCloser::~FileCloser()
 {
-    std::lock_guard lock(_shared->mutex);
-    if (_shared->regionf.is_open()) {
-        _shared->regionf.close();
+    auto& impl = *_impl;
+    std::lock_guard lock(impl.mutex);
+    if (impl.regionf.is_open()) {
+        impl.regionf.close();
     }
+    // This will not be called if the FileCloser is in the cache so we don't need to remove it.
 }
 
 RegionDoesNotExist::~RegionDoesNotExist() noexcept { }
