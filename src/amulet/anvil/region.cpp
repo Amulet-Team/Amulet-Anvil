@@ -3,6 +3,7 @@
 #include <bit>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <list>
@@ -30,15 +31,6 @@
 using namespace Amulet::NBT;
 
 namespace Amulet {
-
-template <typename T>
-static void little_endian_swap(T& value)
-{
-    if constexpr (std::endian::native != std::endian::little) {
-        char* vv = reinterpret_cast<char*>(&value);
-        std::reverse(vv, vv + sizeof(T));
-    }
-}
 
 template <typename T>
 static void big_endian_swap(T& value)
@@ -458,10 +450,15 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
             throw std::invalid_argument("LZ4 compressed block does not start with LZ4Block.");
         }
         char compression_method = src[index + 8] & 0xF0;
-        std::int32_t compressed_length = *reinterpret_cast<const std::int32_t*>(&src[index + 9]);
-        little_endian_swap(compressed_length);
-        std::int32_t original_length = *reinterpret_cast<const std::int32_t*>(&src[index + 13]);
-        little_endian_swap(original_length);
+        std::int32_t compressed_length;
+        std::int32_t original_length;
+        if constexpr (std::endian::native == std::endian::little) {
+            std::memcpy(&compressed_length, &src[index + 9], sizeof(std::int32_t));
+            std::memcpy(&original_length, &src[index + 13], sizeof(std::int32_t));
+        } else {
+            std::reverse_copy(&src[index + 9], &src[index + 9] + sizeof(std::int32_t), reinterpret_cast<char*>(&compressed_length));
+            std::reverse_copy(&src[index + 13], &src[index + 13] + sizeof(std::int32_t), reinterpret_cast<char*>(&original_length));
+        }
         index += 21;
         if (
             original_length < 0
