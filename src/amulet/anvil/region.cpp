@@ -582,7 +582,7 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
     std::uint32_t location = 0;
     if constexpr (std::is_same_v<T, std::string_view>) {
         // Write the new chunk data
-        char format_byte = 0;
+        unsigned char format_byte = 0;
         if (data.size() + 4 > MaxRegionSize) {
             if (!mcc) {
                 throw std::runtime_error("mcc support is not enabled. The caller should check this.");
@@ -595,7 +595,7 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
                 throw std::runtime_error("Could not open file " + mcc_path.string());
             }
             mccf.write(&data[1], data.size() - 1);
-            format_byte = data[0] | 128;
+            format_byte = static_cast<unsigned char>(data[0]) | 128;
             data = std::string_view(reinterpret_cast<char*>(&format_byte), 1);
         }
 
