@@ -464,8 +464,8 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
         if (
             original_length < 0
             || compressed_length < 0
-            || (original_length == 0 and compressed_length != 0)
-            || (original_length != 0 and compressed_length == 0)) {
+            || (original_length == 0) != (compressed_length == 0)
+            || src.size() < index + compressed_length) {
             throw std::invalid_argument("LZ4 compressed block is corrupted.");
         }
         switch (compression_method) {
