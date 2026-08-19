@@ -495,7 +495,7 @@ static void decompress_lz4(const std::string_view src, std::string& dst)
 }
 
 // Decompress the data according to the compression type
-static NamedTag decompress(char compression_type, const std::string_view& data)
+static NamedTag decompress(unsigned char compression_type, const std::string_view& data)
 {
     switch (compression_type) {
     case 1: // GZIP
@@ -550,7 +550,8 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         throw std::runtime_error("Failed reading buffer.");
     }
 
-    if (mcc && (buffer[0] & 128)) {
+    auto format_byte = static_cast<unsigned char>(buffer[0]);
+    if (mcc && (format_byte & 128)) {
         // mcc files are supported and external bit is set.
         std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
         std::ifstream mccf(mcc_path, std::ios::in | std::ios::binary);
@@ -559,9 +560,9 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         }
         std::stringstream mccbuffer;
         mccbuffer << mccf.rdbuf();
-        return decompress(buffer[0] & 127, mccbuffer.view());
+        return decompress(format_byte & 127, mccbuffer.view());
     } else {
-        return decompress(buffer[0], std::string_view(buffer).substr(1));
+        return decompress(format_byte, std::string_view(buffer).substr(1));
     }
 }
 
