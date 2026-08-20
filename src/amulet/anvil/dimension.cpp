@@ -130,6 +130,7 @@ void AnvilChunkCoordIterator::operator++(int)
 
 bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterator& rhs)
 {
+    // Only equal in the end state.
     return lhs._region_it == AnvilRegionCoordIterator() && rhs._region_it == AnvilRegionCoordIterator();
 }
 
@@ -184,25 +185,36 @@ bool AnvilDimensionLayer::has_region_at_chunk(
 std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
     std::int64_t rx, std::int64_t rz, bool create)
 {
-    // Lock parallel modifications
-    // TODO: Some of this could be done in parallel.
-    astd::lock_guard lock(_mutex);
-    if (destroyed) {
-        throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
-    }
     // Get the region key
     auto key = std::make_pair(rx, rz);
-    // Find the region
-    auto it = _regions.find(key);
-    if (it != _regions.end()) {
-        // Return if it already exists.
-        return it->second;
-    } else if (create or has_region(rx, rz)) {
-        // Create the region class
-        auto emp = _regions.emplace(key, std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc));
-        return emp.first->second;
-    } else {
-        throw RegionDoesNotExist();
+    {
+        astd::shared_lock lock(_mutex);
+        if (destroyed) {
+            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
+        }
+        // Find the region
+        auto it = _regions.find(key);
+        if (it != _regions.end()) {
+            // Return if it already exists.
+            return it->second;
+        } else if (create or has_region(rx, rz)) {
+            // Try again in unique mode.
+        } else {
+            throw RegionDoesNotExist();
+        }
+    }
+    {
+        astd::lock_guard lock(_mutex);
+        if (destroyed) {
+            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
+        }
+        // Find the region
+        auto& region_ptr = _regions[key];
+        if (!region_ptr) {
+            // Initialise it if it did not exist.
+            region_ptr = std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc);
+        }
+        return region_ptr;
     }
 }
 
@@ -261,22 +273,22 @@ void AnvilDimensionLayer::compact()
     // TODO: CancelManager
     for (auto it = all_region_coords(); it != AnvilRegionCoordIterator(); it++) {
         auto [cx, cz] = *it;
-        auto region = get_region(cx, cz);
-        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
-        region->compact();
+        auto region_ptr = get_region(cx, cz);
+        auto& region = *region_ptr;
+        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region.get_mutex());
+        region.compact();
     }
 }
 
 void AnvilDimensionLayer::destroy()
 {
-    astd::lock_guard regions_lock(_mutex);
+    astd::lock_guard lock(_mutex);
     destroyed = true;
 
     // Destroy all region instances.
     for (auto& it : _regions) {
         auto& region = *it.second;
-        auto& mutex = region.get_mutex();
-        astd::lock_guard region_lock(mutex);
+        astd::lock_guard region_lock(region.get_mutex());
         region.destroy();
     }
     _regions.clear();
@@ -284,6 +296,7 @@ void AnvilDimensionLayer::destroy()
 
 bool AnvilDimensionLayer::is_destroyed()
 {
+    astd::lock_guard lock(_mutex);
     return destroyed;
 }
 
@@ -317,18 +330,31 @@ bool AnvilDimension::has_layer(const std::string& layer_name)
 
 std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string& layer_name, bool create)
 {
-    astd::shared_lock lock(_mutex);
-    auto it = _layers.find(layer_name);
-    if (it != _layers.end()) {
-        return it->second;
-    }
-    if (create) {
+    {
+        astd::shared_lock lock(_mutex);
         if (destroyed) {
             throw std::runtime_error("This AnvilDimension instance has been destroyed.");
         }
-        return _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first->second;
+        auto it = _layers.find(layer_name);
+        if (it != _layers.end()) {
+            return it->second;
+        } else if (!create) {
+            throw std::invalid_argument("No layer exists with name " + layer_name);
+        }
     }
-    throw std::invalid_argument("No layer exists with name " + layer_name);
+    {
+        astd::lock_guard lock(_mutex);
+        if (destroyed) {
+            throw std::runtime_error("This AnvilDimension instance has been destroyed.");
+        }
+        // Find the layer
+        auto& layer_ptr = _layers[layer_name];
+        if (!layer_ptr) {
+            // Initialise it if it did not exist.
+            layer_ptr = std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc);
+        }
+        return layer_ptr;
+    }
 }
 
 AnvilChunkCoordIterator AnvilDimension::all_chunk_coords() const
@@ -400,6 +426,7 @@ void AnvilDimension::destroy()
 
 bool AnvilDimension::is_destroyed()
 {
+    astd::shared_lock lock(_mutex);
     return destroyed;
 }
 
