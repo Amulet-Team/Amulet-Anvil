@@ -221,14 +221,14 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
 std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region_at_chunk(
     std::int64_t cx, std::int64_t cz, bool create)
 {
-    return get_region(cx >> 5, cx >> 5, create);
+    return get_region(cx >> 5, cz >> 5, create);
 }
 
 bool AnvilDimensionLayer::has_chunk(std::int64_t cx, std::int64_t cz)
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
+        region = get_region_at_chunk(cx, cz);
     } catch (RegionDoesNotExist) {
         return false;
     }
@@ -240,7 +240,7 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
+        region = get_region_at_chunk(cx, cz);
     } catch (RegionDoesNotExist) {
         throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
@@ -250,7 +250,7 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
 
 void AnvilDimensionLayer::set_chunk_data(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag)
 {
-    auto region = get_region(cx >> 5, cz >> 5, true);
+    auto region = get_region_at_chunk(cx, cz, true);
     OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
     return region->set_value(cx, cz, tag);
 }
@@ -259,7 +259,7 @@ void AnvilDimensionLayer::delete_chunk(std::int64_t cx, std::int64_t cz)
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
+        region = get_region_at_chunk(cx, cz);
     } catch (RegionDoesNotExist) {
         return;
     }
