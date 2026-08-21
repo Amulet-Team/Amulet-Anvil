@@ -391,7 +391,7 @@ JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
     }
     if (chunk_data.empty()) {
         if (destroyed) {
-            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
+            throw std::runtime_error("This AnvilDimension instance has been destroyed.");
         }
         throw RegionEntryDoesNotExist();
     }
