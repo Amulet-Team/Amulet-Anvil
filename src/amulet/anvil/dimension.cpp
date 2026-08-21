@@ -16,7 +16,7 @@ void AnvilRegionCoordIterator::seek_to_valid()
             }
             coord = parse_region_filename(it->path().filename().string());
             return;
-        } catch (std::invalid_argument) {
+        } catch (const std::invalid_argument&) {
             continue;
         }
     }
@@ -76,7 +76,7 @@ void AnvilChunkCoordIterator::seek_to_valid()
         std::shared_ptr<AnvilRegion> region;
         try {
             region = layer->get_region(rx, rz);
-        } catch (RegionDoesNotExist) {
+        } catch (const RegionDoesNotExist&) {
             continue;
         }
         OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -229,7 +229,7 @@ bool AnvilDimensionLayer::has_chunk(std::int64_t cx, std::int64_t cz)
     std::shared_ptr<AnvilRegion> region;
     try {
         region = get_region_at_chunk(cx, cz);
-    } catch (RegionDoesNotExist) {
+    } catch (const RegionDoesNotExist&) {
         return false;
     }
     OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -241,7 +241,7 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
     std::shared_ptr<AnvilRegion> region;
     try {
         region = get_region_at_chunk(cx, cz);
-    } catch (RegionDoesNotExist) {
+    } catch (const RegionDoesNotExist&) {
         throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -260,7 +260,7 @@ void AnvilDimensionLayer::delete_chunk(std::int64_t cx, std::int64_t cz)
     std::shared_ptr<AnvilRegion> region;
     try {
         region = get_region_at_chunk(cx, cz);
-    } catch (RegionDoesNotExist) {
+    } catch (const RegionDoesNotExist&) {
         return;
     }
     OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -382,7 +382,7 @@ JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
         OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
         try {
             chunk_data.emplace(layer_name, layer.get_chunk_data(cx, cz));
-        } catch (RegionEntryDoesNotExist) {
+        } catch (const RegionEntryDoesNotExist&) {
         }
     }
     if (chunk_data.empty()) {
