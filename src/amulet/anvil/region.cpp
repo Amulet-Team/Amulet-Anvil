@@ -71,14 +71,13 @@ public:
             _values.emplace_back(k, std::move(v));
             _map.emplace(k, --_values.end());
 
-            auto overflow_count = std::max(static_cast<size_t>(0), _values.size() - _max_size);
-            if (overflow_count) {
+            if (_max_size < _values.size()) {
                 // Move the overflowed values to a temporary list so they can be released outside of the lock.
                 released_closers.splice(
                     released_closers.begin(),
                     _values,
                     _values.begin(),
-                    std::next(_values.begin(), overflow_count)
+                    std::next(_values.begin(), _values.size() - _max_size)
                 );
                 for (const auto& [k, v] : released_closers) {
                     _map.erase(k);
