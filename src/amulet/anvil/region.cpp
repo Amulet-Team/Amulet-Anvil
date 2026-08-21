@@ -56,14 +56,6 @@ private:
     std::list<Pair> _values ASTD_GUARDED_BY(_mutex);
     std::map<WeakImpl, typename std::list<Pair>::iterator, std::owner_less<WeakImpl>> _map ASTD_GUARDED_BY(_mutex);
 
-    void remove_extra() ASTD_REQUIRES_UNIQUE(_mutex)
-    {
-        while (_max_size < _values.size()) {
-            _map.erase(_values.front().first);
-            _values.pop_front();
-        }
-    }
-
 public:
     FileCloserCache(size_t max_size)
         : _max_size(max_size) { };
@@ -71,13 +63,27 @@ public:
     // Add an item.
     void add(WeakImpl k, SharedCloser v) ASTD_EXCLUDES(_mutex)
     {
+        std::list<Pair> released_closers;
         astd::lock_guard lock(_mutex);
         auto it = _map.find(k);
         if (it == _map.end()) {
             // Create and insert the value
             _values.emplace_back(k, std::move(v));
             _map.emplace(k, --_values.end());
-            remove_extra();
+
+            auto overflow_count = std::max(0ull, _values.size() - _max_size);
+            if (overflow_count) {
+                // Move the overflowed values to a temporary list so they can be released outside of the lock.
+                released_closers.splice(
+                    released_closers.begin(),
+                    _values,
+                    _values.begin(),
+                    std::next(_values.begin(), overflow_count)
+                );
+                for (const auto& [k, v] : released_closers) {
+                    _map.erase(k);
+                }
+            }
         } else {
             // Move the value to the end.
             _values.splice(_values.end(), _values, it->second);
