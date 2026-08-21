@@ -99,7 +99,7 @@ private:
     Amulet::OrderedMutex _public_mutex;
     const std::filesystem::path _directory;
     const bool _mcc;
-    astd::mutex _mutex;
+    astd::shared_mutex _mutex;
     std::map<std::pair<std::int64_t, std::int64_t>, std::shared_ptr<Amulet::AnvilRegion>> _regions ASTD_GUARDED_BY(_mutex);
     bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
