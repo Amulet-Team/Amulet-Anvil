@@ -104,8 +104,12 @@ void AnvilChunkCoordIterator::seek_to_next_valid()
 
 AnvilChunkCoordIterator::AnvilChunkCoordIterator() { }
 
-AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer)
-    : _layer(std::move(layer))
+AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<AnvilDimensionLayer> layer)
+    : _layer([&]() -> std::weak_ptr<AnvilDimensionLayer> { 
+        if (!layer) {
+            throw std::invalid_argument("layer is nullptr");
+        }
+        return layer; }())
     , _region_it(layer->all_region_coords())
     , _coord_it(_coords.end())
 {
