@@ -194,7 +194,7 @@ public:
 };
 
 template <typename Range, typename T>
-concept TypedForwardRange = std::ranges::forward_range<Range> && std::convertible_to<std::ranges::range_value_t<Range>, T>;
+concept TypedInputRange = std::ranges::input_range<Range> && std::convertible_to<std::ranges::range_value_t<Range>, T>;
 
 using JavaRawChunk = std::map<std::string, Amulet::NBT::NamedTag>;
 
@@ -208,22 +208,36 @@ private:
     const std::shared_ptr<AnvilDimensionLayer> _default_layer;
     bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
+    AnvilDimension(
+        std::tuple<
+            std::filesystem::path,
+            std::map<std::string, std::shared_ptr<AnvilDimensionLayer>>, 
+            std::shared_ptr<AnvilDimensionLayer>> layers,
+        bool mcc);
+
 public:
-    template <TypedForwardRange<std::string> layersT>
+    template <TypedInputRange<std::string> layersT>
     AnvilDimension(std::filesystem::path directory, layersT layer_names, bool mcc = false)
-        : _directory(std::move(directory))
-        , _mcc(mcc)
-        , _layers([&]() {
-            if (layer_names.begin() == layer_names.end()) {
-                throw std::invalid_argument("layer_names must contain at least one name.");
-            }
-            std::map<std::string, std::shared_ptr<AnvilDimensionLayer>> layers;
-            for (const auto& layer_name : layer_names) {
-                layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc));
-            };
-            return layers;
-        }())
-        , _default_layer(_layers[*layer_names.begin()])
+        : AnvilDimension(
+              [](std::filesystem::path directory, layersT& layer_names, bool mcc) {
+                  std::map<std::string, std::shared_ptr<AnvilDimensionLayer>> layers;
+                  std::shared_ptr<AnvilDimensionLayer> default_layer;
+                  for (const auto& layer_name : layer_names) {
+                      auto layer = std::make_shared<AnvilDimensionLayer>(directory / layer_name, mcc);
+                      if (!default_layer) {
+                          default_layer = layer;
+                      }
+                      layers.emplace(layer_name, std::move(layer));
+                  }
+                  if (layers.empty()) {
+                      throw std::invalid_argument("layer_names must contain at least one name.");
+                  }
+                  return std::make_tuple(
+                      std::move(directory), 
+                      std::move(layers), 
+                      std::move(default_layer));
+              }(std::move(directory), layer_names, mcc),
+              mcc)
     {
     }
 
