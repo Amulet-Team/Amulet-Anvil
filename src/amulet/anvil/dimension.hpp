@@ -214,9 +214,9 @@ private:
 public:
     template <TypedInputRange<std::string> layersT>
     AnvilDimension(std::filesystem::path directory, layersT layer_names, bool mcc = false)
-        : _directory(directory)
+        : _directory(std::move(directory))
         , _mcc(mcc)
-        , _layers([&layer_names]() {
+        , _layers([&]() {
             if (layer_names.begin() == layer_names.end()) {
                 throw std::invalid_argument("layer_names must contain at least one name.");
             }
@@ -225,7 +225,7 @@ public:
                 layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc));
             };
             return layers;
-        })
+        }())
         , _default_layer(_layers[*layer_names.begin()])
     {
     }
