@@ -194,7 +194,7 @@ public:
 };
 
 template <typename Range, typename T>
-concept TypedInputRange = std::ranges::input_range<Range> && std::convertible_to<std::ranges::range_value_t<Range>, T>;
+concept TypedForwardRange = std::ranges::forward_range<Range> && std::convertible_to<std::ranges::range_value_t<Range>, T>;
 
 using JavaRawChunk = std::map<std::string, Amulet::NBT::NamedTag>;
 
@@ -209,7 +209,7 @@ private:
     bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
 public:
-    template <TypedInputRange<std::string> layersT>
+    template <TypedForwardRange<std::string> layersT>
     AnvilDimension(std::filesystem::path directory, layersT layer_names, bool mcc = false)
         : _directory(std::move(directory))
         , _mcc(mcc)
