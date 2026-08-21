@@ -272,8 +272,13 @@ void AnvilDimensionLayer::compact()
     // TODO: Threads
     // TODO: CancelManager
     for (auto it = all_region_coords(); it != AnvilRegionCoordIterator(); it++) {
-        auto [cx, cz] = *it;
-        auto region_ptr = get_region(cx, cz);
+        auto [rx, rz] = *it;
+        std::shared_ptr<AnvilRegion> region_ptr;
+        try {
+            region_ptr = get_region(rx, rz);
+        } catch (const RegionDoesNotExist&) {
+            continue;
+        }
         auto& region = *region_ptr;
         OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region.get_mutex());
         region.compact();
