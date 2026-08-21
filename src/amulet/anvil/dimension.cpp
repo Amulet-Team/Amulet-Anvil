@@ -135,7 +135,11 @@ void AnvilChunkCoordIterator::operator++(int)
 bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterator& rhs)
 {
     // Only equal in the end state.
-    return lhs._region_it == AnvilRegionCoordIterator() && rhs._region_it == AnvilRegionCoordIterator();
+    if (lhs._region_it == AnvilRegionCoordIterator()) {
+        return rhs._region_it == AnvilRegionCoordIterator();
+    } else {
+        return lhs._region_it == rhs._region_it && *lhs._coord_it == *rhs._coord_it;
+    }
 }
 
 // AnvilDimensionLayer
