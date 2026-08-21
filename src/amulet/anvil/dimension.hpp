@@ -27,12 +27,6 @@
 
 namespace Amulet {
 
-template <bool condition, typename... values>
-struct Ensure {
-    static_assert(condition);
-    static bool const value = condition;
-};
-
 // An input iterator over region coordinates in a directory.
 class AMULET_ANVIL_EXPORT AnvilRegionCoordIterator {
     // Not thread safe.
@@ -282,55 +276,85 @@ public:
     template <typename dataT>
     void set_chunk_data(std::int64_t cx, std::int64_t cz, const dataT& data_layers) ASTD_EXCLUDES(_mutex)
     {
+        using ItT = std::ranges::range_value_t<dataT>;
+        using NameT = std::remove_cv_t<std::tuple_element_t<0, ItT>>;
+        using TagT = std::remove_cv_t<std::tuple_element_t<1, ItT>>;
+
+        static_assert(std::is_same_v<NameT, std::string>);
+        static_assert(std::is_same_v<TagT, Amulet::NBT::NamedTag> || std::is_same_v<TagT, std::optional<Amulet::NBT::NamedTag>>);
+
+        bool missing = false;
+        std::vector<std::pair<ItT, std::shared_ptr<AnvilDimensionLayer>>> layers;
+
         astd::shared_lock slock(_mutex);
-        for (const auto& [layer_name, data] : data_layers) {
-            static_assert(Ensure<
-                std::is_same_v<decltype(layer_name), const std::string>,
-                decltype(layer_name),
-                const std::string>::value);
-            static_assert(Ensure < std::is_same_v<decltype(data), const Amulet::NBT::NamedTag> || std::is_same_v<decltype(data), const std::optional<Amulet::NBT::NamedTag>>,
-                decltype(layer_name),
-                const Amulet::NBT::NamedTag,
-                const std::optional < Amulet::NBT::NamedTag >> ::value);
-            std::map<std::string, std::shared_ptr<AnvilDimensionLayer>>::iterator it = _layers.find(layer_name);
-            if (it == _layers.end()) {
-                // Layer does not currently exist.
-                if constexpr (std::is_same_v<decltype(data), const std::optional<Amulet::NBT::NamedTag>>) {
+        if (destroyed) {
+            throw std::runtime_error("This AnvilDimension instance has been destroyed.");
+        }
+
+        // Iterate through each item and find the layer for that item.
+        // If the layer does not exist, store a nullptr.
+        for (const auto& data_layers_it : data_layers) {
+            const auto& [layer_name, data] = data_layers_it;
+            auto it = _layers.find(layer_name);
+            if (it != _layers.end()) {
+                layers.emplace_back(data_layers_it, it->second);
+            } else {
+                if constexpr (std::is_same_v<TagT, std::optional<Amulet::NBT::NamedTag>>) {
                     if (!data) {
-                        // If it was going to be deleted then do nothing.
+                        // Do nothing because we were going to delte the data but the layer does not exist.
                         continue;
                     }
-                } else if (std::all_of(layer_name.begin(), layer_name.end(), [](char c) { return 0x61 <= c && c <= 0x7A; })) {
-                    if (destroyed) {
-                        throw std::runtime_error("This AnvilDimension instance has been destroyed.");
-                    }
-                    // Switch to a unique lock to mutate _layers
-                    slock.unlock();
-                    {
-                        astd::lock_guard ulock(_mutex);
-                        // Create the layer.
-                        it = _layers.emplace(
-                                        layer_name,
-                                        std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc))
-                                 .first;
-                    }
-                    // Switch back to a shared lock
-                    slock.lock();
-                } else {
-                    error("Anvil layer contains characters not in the range a-z");
+                }
+                if (!std::all_of(layer_name.begin(), layer_name.end(), [](char c) { return 0x61 <= c && c <= 0x7A; })) {
+                    error("Anvil layer " + layer_name + " contains characters not in the range a-z");
                     continue;
                 }
+                missing = true;
+                layers.emplace_back(data_layers_it, nullptr);
             }
-            auto& layer = it->second;
-            OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> lock(layer->get_mutex());
-            if constexpr (std::is_same_v<decltype(data), const std::optional<Amulet::NBT::NamedTag>>) {
+        }
+
+        if (missing) {
+            // The last stage found a layer that does not exist.
+            // We need to switch to a unique lock to create the layer.
+            slock.unlock();
+            {
+                astd::lock_guard ulock(_mutex);
+                if (destroyed) {
+                    throw std::runtime_error("This AnvilDimension instance has been destroyed.");
+                }
+                // Iterate through the data and create missing layers.
+                for (auto& [data_layers_it, layer_ptr] : layers) {
+                    if (!layer_ptr) {
+                        const auto& [layer_name, data] = data_layers_it;
+                        // The layer may have been created by another thread while we were waiting for the lock.
+                        auto& layer_ptr_ref = _layers[layer_name];
+                        if (!layer_ptr_ref) {
+                            layer_ptr_ref = std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc);
+                        }
+                        layer_ptr = layer_ptr_ref;
+                    }
+                }
+            }
+            slock.lock();
+            if (destroyed) {
+                throw std::runtime_error("This AnvilDimension instance has been destroyed.");
+            }
+        }
+
+        for (auto& [data_layers_it, layer_ptr] : layers) {
+            const auto& [layer_name, data] = data_layers_it;
+            auto& layer = *layer_ptr;
+            OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> lock(layer.get_mutex());
+            if constexpr (std::is_same_v<TagT, std::optional<Amulet::NBT::NamedTag>>) {
                 if (data) {
-                    layer->set_chunk_data(cx, cz, *data);
+                    layer.set_chunk_data(cx, cz, *data);
                 } else {
-                    layer->delete_chunk(cx, cz);
+                    layer.delete_chunk(cx, cz);
                 }
             } else {
-                layer->set_chunk_data(cx, cz, data);
+                static_assert(std::is_same_v<TagT, Amulet::NBT::NamedTag>);
+                layer.set_chunk_data(cx, cz, data);
             }
         }
     }
