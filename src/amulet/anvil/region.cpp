@@ -143,8 +143,7 @@ public:
     bool destroyed ASTD_GUARDED_BY(mutex) = false;
 
     // Region file closer
-    astd::mutex file_closer_mutex;
-    std::weak_ptr<AnvilRegion::FileCloser> file_closer_ref ASTD_GUARDED_BY(file_closer_mutex);
+    std::weak_ptr<AnvilRegion::FileCloser> file_closer_ref ASTD_GUARDED_BY(mutex);
 
     Impl(
         std::filesystem::path dir,
@@ -184,72 +183,71 @@ public:
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    std::vector<std::pair<std::int64_t, std::int64_t>> get_coords() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    std::vector<std::pair<std::int64_t, std::int64_t>> get_coords() ASTD_EXCLUDES(mutex);
 
     // Is the coordinate in the region.
     // This returns true even if there is no value for the coordinate.
     // Coordinates are in world space.
     // Thread safe.
-    bool contains(std::int64_t cx, std::int64_t cz) const ASTD_EXCLUDES(mutex, file_closer_mutex);
+    bool contains(std::int64_t cx, std::int64_t cz) const ASTD_EXCLUDES(mutex);
 
     // Is there a value stored for this coordinate.
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+    bool has_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex);
 
     // Get the value for this coordinate.
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
-    Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+    Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex);
 
     // AMULET_ANVIL_EXPORT std::vector<std::optional<Amulet::NBT::NamedTag>> get_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
 
     // Set the value for this coordinate.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag) ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag) ASTD_EXCLUDES(mutex);
 
     // AMULET_ANVIL_EXPORT void set_batch(std::vector<std::tuple<std::int64_t, std::int64_t, Amulet::NBT::NamedTag>>& batch);
 
     // Delete the chunk data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void delete_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES(mutex);
 
     // Delete multiple chunk's data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_EXCLUDES(mutex);
 
     // Compact the region file.
     // Defragments the file and deletes unused space.
     // If there are no chunks remaining in the region file it will be deleted.
     // External ReadWrite:SharedReadWrite lock required.
-    void compact() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void compact() ASTD_EXCLUDES(mutex);
 
     // Close the file object if open.
     // This is automatically called when the instance is destroyed but may be called earlier.
     // Thread safe.
-    void close() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void close() ASTD_EXCLUDES(mutex);
 
     // Destroy the instance.
     // Calls made after this will fail.
     // This may only be called by the owner of the instance.
     // External ReadWrite:Unique lock required.
-    void destroy() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    void destroy() ASTD_EXCLUDES(mutex);
 
     // Has the instance been destroyed.
     // If this is false, other calls will fail.
     // External Read:SharedReadWrite lock required.
-    bool is_destroyed() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    bool is_destroyed() ASTD_EXCLUDES(mutex);
 
     // Get the object responsible for closing the region file.
     // When this object is deleted it will close the region file
     // This means that holding a reference to this will delay when the region file is closed.
     // The region file may still be closed manually before this object is deleted.
-    // Thread safe.
-    std::shared_ptr<FileCloser> get_file_closer() ASTD_EXCLUDES(mutex, file_closer_mutex);
+    std::shared_ptr<FileCloser> get_file_closer() ASTD_REQUIRES_UNIQUE(mutex);
 };
 
 AnvilRegion::Impl::Impl(
@@ -856,7 +854,6 @@ void AnvilRegion::Impl::compact()
 
 std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::get_file_closer()
 {
-    astd::lock_guard closer_lock(file_closer_mutex);
     std::shared_ptr<AnvilRegion::FileCloser> file_closer = file_closer_ref.lock();
     if (!file_closer) {
         file_closer = std::make_shared<AnvilRegion::FileCloser>(shared_from_this());
@@ -987,7 +984,9 @@ void AnvilRegion::compact()
 
 std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::get_file_closer()
 {
-    return _impl->get_file_closer();
+    auto& impl = *_impl;
+    std::lock_guard lock(impl.mutex);
+    return impl.get_file_closer();
 }
 
 AnvilRegion::FileCloser::FileCloser(std::shared_ptr<Impl> impl)
