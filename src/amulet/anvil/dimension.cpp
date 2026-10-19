@@ -215,10 +215,10 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
             throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
         }
         // Find the region
-        auto it = _regions.find(key);
-        if (it != _regions.end()) {
+        auto region_it = _regions.find(key);
+        if (region_it != _regions.end()) {
             // Return if it already exists.
-            return it->second;
+            return region_it->second;
         } else if (create or has_region(rx, rz)) {
             // Try again in unique mode.
         } else {
@@ -231,12 +231,12 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
             throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
         }
         // Find the region
-        auto& region_ptr = _regions[key];
-        if (!region_ptr) {
+        auto region_it = _regions.find(key);
+        if (region_it == _regions.end()) {
             // Initialise it if it did not exist.
-            region_ptr = std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc);
+            region_it = _regions.emplace(key, std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc)).first;
         }
-        return region_ptr;
+        return region_it->second;
     }
 }
 
