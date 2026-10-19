@@ -218,12 +218,9 @@ private:
     const std::shared_ptr<AnvilDimensionLayer> _default_layer;
     bool destroyed ASTD_GUARDED_BY(_mutex) = false;
 
-    AnvilDimension(
-        std::tuple<
-            std::filesystem::path,
-            std::map<std::string, std::shared_ptr<AnvilDimensionLayer>>, 
-            std::shared_ptr<AnvilDimensionLayer>> layers,
-        bool mcc);
+    using AnvilDimensionDataTuple = std::tuple<std::filesystem::path, std::map<std::string, std::shared_ptr<AnvilDimensionLayer>>, std::shared_ptr<AnvilDimensionLayer>>;
+
+    AnvilDimension(AnvilDimensionDataTuple data, bool mcc);
 
 public:
     template <TypedInputRange<std::string> layersT>

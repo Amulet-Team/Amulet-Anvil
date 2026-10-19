@@ -344,12 +344,7 @@ std::vector<std::string> AnvilDimension::layer_names()
     return layers;
 }
 
-AnvilDimension::AnvilDimension(
-    std::tuple<
-        std::filesystem::path,
-        std::map<std::string, std::shared_ptr<AnvilDimensionLayer>>, 
-        std::shared_ptr<AnvilDimensionLayer>> data,
-    bool mcc)
+AnvilDimension::AnvilDimension(AnvilDimensionDataTuple data, bool mcc)
     : _directory(std::move(std::get<0>(data)))
     , _mcc(mcc)
     , _layers(std::move(std::get<1>(data)))
