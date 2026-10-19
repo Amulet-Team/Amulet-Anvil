@@ -244,8 +244,8 @@ public:
                       throw std::invalid_argument("layer_names must contain at least one name.");
                   }
                   return std::make_tuple(
-                      std::move(directory), 
-                      std::move(layers), 
+                      std::move(directory),
+                      std::move(layers),
                       std::move(default_layer));
               }(std::move(directory), layer_names, mcc),
               mcc)

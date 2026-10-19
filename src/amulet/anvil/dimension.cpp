@@ -161,7 +161,8 @@ AnvilDimensionLayer::~AnvilDimensionLayer()
     destroy();
 }
 
-bool AnvilDimensionLayer::is_valid_layer_name(const std::string& layer_name) {
+bool AnvilDimensionLayer::is_valid_layer_name(const std::string& layer_name)
+{
     if (layer_name.empty()) {
         // Must contain at least one character
         return false;

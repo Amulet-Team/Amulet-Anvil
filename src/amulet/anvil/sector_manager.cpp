@@ -4,7 +4,7 @@
 
 namespace Amulet {
 
-NoValidSector::~NoValidSector() noexcept {}
+NoValidSector::~NoValidSector() noexcept { }
 
 size_t Sector::length() const { return stop - start; }
 

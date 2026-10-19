@@ -11,10 +11,10 @@ py::module init_anvil_region(py::module m_parent)
 
     py::classh<Amulet::AnvilRegion>
         AnvilRegion(m, "AnvilRegion", py::release_gil_before_calling_cpp_dtor(),
-        "A class to read and write Minecraft Java Edition Region files.\n"
-        "Only one instance should exist per region file at any given time otherwise bad things may happen.\n"
-        "This class is internally thread safe but a public lock is provided to enable external synchronisation.\n"
-        "Upstream locks from the level must also be adhered to.");
+            "A class to read and write Minecraft Java Edition Region files.\n"
+            "Only one instance should exist per region file at any given time otherwise bad things may happen.\n"
+            "This class is internally thread safe but a public lock is provided to enable external synchronisation.\n"
+            "Upstream locks from the level must also be adhered to.");
 
     py::classh<Amulet::AnvilRegion::FileCloser>
         FileCloser(AnvilRegion, "FileCloser",
