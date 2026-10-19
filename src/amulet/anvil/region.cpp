@@ -77,8 +77,7 @@ public:
                     released_closers.begin(),
                     _values,
                     _values.begin(),
-                    std::next(_values.begin(), _values.size() - _max_size)
-                );
+                    std::next(_values.begin(), _values.size() - _max_size));
                 for (const auto& [k, v] : released_closers) {
                     _map.erase(k);
                 }
@@ -166,9 +165,12 @@ public:
 
     void validate_coord(std::int64_t cx, std::int64_t cz) const;
 
+    void set_header(std::int64_t cx, std::int64_t cz, std::uint32_t location) ASTD_REQUIRES_UNIQUE(mutex);
+
     // Set chunk data.
     // Caller must ensure the file is open.
     template <typename T>
+        requires std::is_same_v<T, std::string_view> || std::is_same_v<T, std::nullopt_t>
     void set_data(std::int64_t cx, std::int64_t cz, T data) ASTD_REQUIRES_UNIQUE(mutex);
 
     // Close the file object.
@@ -178,6 +180,10 @@ public:
     // Close the file object if open.
     // This is automatically called when the instance is destroyed but may be called earlier.
     void _close_if_open() ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Close the file object and clear cached data.
+    // Use this if a header write failed to ensure the cached data mirrors the file.
+    void _close_and_clear() ASTD_REQUIRES_UNIQUE(mutex);
 
     // Get the coordinates of all values in the region file.
     // Coordinates are in world space.
@@ -316,6 +322,8 @@ void AnvilRegion::Impl::create_open_region_file_if_closed()
         } else {
             create_region_file();
         }
+    } else {
+        regionf.clear(); // Clear error flags
     }
 }
 
@@ -331,11 +339,14 @@ void AnvilRegion::Impl::read_file_header()
     }
 
     // Load the region data
-    sector_manager = SectorManager(0, SectorSize * 2);
-    sector_manager->reserve(Sector(0, SectorSize * 2));
+    std::map<std::pair<std::int64_t, std::int64_t>, Sector> local_chunk_locations;
+    SectorManager local_sector_manager(0, SectorSize * 2);
+    local_sector_manager.reserve(Sector(0, SectorSize * 2));
 
     if (std::filesystem::is_regular_file(path)) {
-        if (!regionf.is_open()) {
+        if (regionf.is_open()) {
+            regionf.clear(); // Clear error flags
+        } else {
             open_region_file();
         }
         // Read the location table header.
@@ -357,12 +368,14 @@ void AnvilRegion::Impl::read_file_header()
                     size_t sector_offset = (sector_data >> 8) * SectorSize;
                     size_t sector_size = (sector_data & 0xFF) * SectorSize;
                     Sector sector(sector_offset, sector_offset + sector_size);
-                    sector_manager->reserve(sector);
-                    chunk_locations.emplace(std::make_pair(cx + rx * 32, cz + rz * 32), sector);
+                    local_sector_manager.reserve(sector);
+                    local_chunk_locations.emplace(std::make_pair(cx + rx * 32, cz + rz * 32), sector);
                 }
             }
         }
     }
+    sector_manager = std::move(local_sector_manager);
+    chunk_locations = std::move(local_chunk_locations);
 }
 
 void AnvilRegion::Impl::_close()
@@ -377,6 +390,13 @@ void AnvilRegion::Impl::_close_if_open()
         regionf.close();
     }
     region_file_cache.remove(weak_from_this());
+}
+
+void AnvilRegion::Impl::_close_and_clear()
+{
+    _close();
+    sector_manager = std::nullopt;
+    chunk_locations.clear();
 }
 
 void AnvilRegion::Impl::close()
@@ -527,7 +547,7 @@ static NamedTag decompress(unsigned char compression_type, const std::string_vie
 NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
-    astd::lock_guard lock(mutex);
+    astd::unique_lock lock(mutex);
     auto closer = _get_file_closer();
     read_file_header();
     auto it = chunk_locations.find(std::make_pair(cx, cz));
@@ -566,13 +586,45 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         }
         std::stringstream mccbuffer;
         mccbuffer << mccf.rdbuf();
+        lock.unlock();
         return decompress(format_byte & 127, mccbuffer.view());
     } else {
+        lock.unlock();
         return decompress(format_byte, std::string_view(buffer).substr(1));
     }
 }
 
+void AnvilRegion::Impl::set_header(std::int64_t cx, std::int64_t cz, std::uint32_t location)
+{
+    size_t header_offset = 4 * (cx - rx * 32 + (cz - rz * 32) * 32);
+
+    // Write timestamp
+    if (!regionf.seekp(SectorSize + header_offset)) {
+        throw std::runtime_error("Failed seeking to timestamp table in region file " + path.string());
+    }
+    std::uint32_t t;
+    if (location) {
+        t = static_cast<std::uint32_t>(std::time(NULL));
+        big_endian_swap(t);
+    } else {
+        t = 0;
+    }
+    if (!regionf.write(reinterpret_cast<char*>(&t), 4)) {
+        throw std::runtime_error("Failed writing timestamp to region file " + path.string());
+    }
+
+    // Write chunk location
+    if (!regionf.seekp(header_offset)) {
+        throw std::runtime_error("Failed seeking to location table in region file " + path.string());
+    }
+    big_endian_swap(location);
+    if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
+        throw std::runtime_error("Failed writing location to region file " + path.string());
+    }
+}
+
 template <typename T>
+    requires std::is_same_v<T, std::string_view> || std::is_same_v<T, std::nullopt_t>
 void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
 {
     // Find the old sector
@@ -580,12 +632,15 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
     auto old_sector_it = chunk_locations.find(std::make_pair(cx, cz));
     if (old_sector_it != chunk_locations.end()) {
         old_sector = old_sector_it->second;
-        chunk_locations.erase(old_sector_it);
+    } else if constexpr (std::is_same_v<T, std::nullopt_t>) {
+        return; // Nothing to delete
     }
 
-    bool mcc_overwritten = false;
+    const std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
+    std::filesystem::path old_mcc_path = std::filesystem::is_regular_file(mcc_path) ? mcc_path : std::filesystem::path();
+    bool mcc_written = false;
 
-    std::uint32_t location = 0;
+    std::uint32_t location;
     if constexpr (std::is_same_v<T, std::string_view>) {
         // Write the new chunk data
         unsigned char format_byte = 0;
@@ -593,14 +648,61 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
             if (!mcc) {
                 throw std::runtime_error("mcc support is not enabled. The caller should check this.");
             }
-            // save externally (if mcc files are not supported the check at the top will filter large files out)
-            mcc_overwritten = true;
-            std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
-            std::ofstream mccf(mcc_path, std::ios::out | std::ios::binary | std::ios::trunc);
+
+            // Write the external file to a temporary location.
+            std::filesystem::path mcc_temp_path = mcc_path;
+            mcc_temp_path += ".tmp";
+            std::ofstream mccf(mcc_temp_path, std::ios::out | std::ios::binary | std::ios::trunc);
             if (!mccf) {
-                throw std::runtime_error("Could not open file " + mcc_path.string());
+                throw std::runtime_error("Could not open file " + mcc_temp_path.string());
             }
-            mccf.write(&data[1], data.size() - 1);
+            try {
+                if (!mccf.write(&data[1], data.size() - 1)) {
+                    throw std::runtime_error("Failed writing to mcc file " + mcc_temp_path.string());
+                }
+                if (!mccf.flush()) {
+                    throw std::runtime_error("Failed flushing to mcc file " + mcc_temp_path.string());
+                }
+                mccf.close();
+                if (!mccf) {
+                    throw std::runtime_error("Failed closing mcc file " + mcc_temp_path.string());
+                }
+            } catch (...) {
+                mccf.close();
+                std::error_code e;
+                std::filesystem::remove(mcc_temp_path, e);
+                throw;
+            }
+
+            // Swap the old file for the new file.
+            if (!old_mcc_path.empty()) {
+                // If the file already exists, rename it to a backup file.
+                old_mcc_path += ".old";
+                try {
+                    std::filesystem::rename(mcc_path, old_mcc_path);
+                } catch (...) {
+                    // Remove the temp path if renaming the old mcc file failed.
+                    std::error_code e;
+                    std::filesystem::remove(mcc_temp_path, e);
+                    throw;
+                }
+            }
+            // Rename the new file to the correct name.
+            try {
+                std::filesystem::rename(mcc_temp_path, mcc_path);
+            } catch (...) {
+                // If renaming fails, restore the old mcc file if one exists.
+                if (!old_mcc_path.empty()) {
+                    std::error_code e;
+                    std::filesystem::rename(old_mcc_path, mcc_path, e);
+                    std::filesystem::remove(mcc_temp_path, e);
+                }
+                throw;
+            }
+
+            mcc_written = true;
+
+            // Construct the header byte.
             format_byte = static_cast<unsigned char>(data[0]) | 128;
             data = std::string_view(reinterpret_cast<char*>(&format_byte), 1);
         }
@@ -614,63 +716,105 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
         }
         // Reserve a sector large enough to fit the data.
         auto sector = sector_manager->reserve_space(sector_length);
-        if (sector.start & 0xFFF) {
-            throw std::runtime_error("Sector size is not a multiple of 0x1000.");
-        }
-        chunk_locations.emplace(std::make_pair(cx, cz), sector);
-        // Seek to the sector to write to
-        if (!regionf.seekp(sector.start)) {
-            throw std::runtime_error("Failed seeking to sector in region file " + path.string());
-        }
-        // Write the size value
-        std::uint32_t data_size_buffer = static_cast<std::uint32_t>(data_size);
-        big_endian_swap(data_size_buffer);
-        if (!regionf.write(reinterpret_cast<char*>(&data_size_buffer), 4)) {
-            throw std::runtime_error("Failed writing size to region file " + path.string());
-        }
-        // Write the data
-        if (!regionf.write(data.data(), data.size())) {
-            throw std::runtime_error("Failed writing data to region file " + path.string());
-        }
-        // Pad to sector_length
-        size_t pad_size = sector_length - payload_size;
-        if (pad_size) {
-            if (!regionf.write(EmptyHeader.data(), pad_size)) {
-                throw std::runtime_error("Failed writing padding to region file " + path.string());
+        try {
+            if (sector.start & 0xFFF) {
+                throw std::runtime_error("Sector size is not a multiple of 0x1000.");
             }
+            // Seek to the sector to write to
+            if (!regionf.seekp(sector.start)) {
+                throw std::runtime_error("Failed seeking to sector in region file " + path.string());
+            }
+            // Write the size value
+            std::uint32_t data_size_buffer = static_cast<std::uint32_t>(data_size);
+            big_endian_swap(data_size_buffer);
+            if (!regionf.write(reinterpret_cast<char*>(&data_size_buffer), 4)) {
+                throw std::runtime_error("Failed writing size to region file " + path.string());
+            }
+            // Write the data
+            if (!regionf.write(data.data(), data.size())) {
+                throw std::runtime_error("Failed writing data to region file " + path.string());
+            }
+            // Pad to sector_length
+            size_t pad_size = sector_length - payload_size;
+            if (pad_size) {
+                if (!regionf.write(EmptyHeader.data(), pad_size)) {
+                    throw std::runtime_error("Failed writing padding to region file " + path.string());
+                }
+            }
+            // Set the header
+            location = static_cast<std::uint32_t>((sector.start >> 4) + (sector_length >> 12));
+        } catch (...) {
+            sector_manager->free(sector);
+            // Reset the mcc file
+            if (mcc_written) {
+                if (old_mcc_path.empty()) {
+                    // Delete the new mcc file.
+                    std::error_code e;
+                    std::filesystem::remove(mcc_path, e);
+                } else {
+                    // Replace the new mcc file with the old one.
+                    std::error_code e;
+                    std::filesystem::rename(old_mcc_path, mcc_path, e);
+                }
+            }
+
+            throw;
         }
-        // Create the location value
-        location = static_cast<std::uint32_t>((sector.start >> 4) + (sector_length >> 12));
-        big_endian_swap(location);
+        chunk_locations.insert_or_assign(std::make_pair(cx, cz), sector);
+    } else {
+        // Set the header
+        location = 0;
     }
 
-    // Write header data
-    if (!regionf.seekp(4 * (cx - rx * 32 + (cz - rz * 32) * 32))) {
-        throw std::runtime_error("Failed seeking to location table in region file " + path.string());
-    }
-    if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
-        throw std::runtime_error("Failed writing location to region file " + path.string());
-    }
-    if (!regionf.seekp(SectorSize - 4, std::ios::cur)) {
-        throw std::runtime_error("Failed seeking to timestamp table in region file " + path.string());
-    }
-    std::uint32_t t = static_cast<std::uint32_t>(std::time(NULL));
-    big_endian_swap(t);
-    if (!regionf.write(reinterpret_cast<char*>(&t), 4)) {
-        throw std::runtime_error("Failed writing timestamp to region file " + path.string());
+    try {
+        set_header(cx, cz, location);
+        if (!regionf.flush()) {
+            throw std::runtime_error("Failed flushing region file " + path.string());
+        }
+    } catch (...) {
+        // The state of the file is unknown. Clear the cached data and reload from disk.
+        _close_and_clear();
+        read_file_header();
+        std::uint32_t disk_location = 0;
+        auto sector_it = chunk_locations.find(std::make_pair(cx, cz));
+        if (sector_it != chunk_locations.end()) {
+            auto& sector = sector_it->second;
+            disk_location = (sector.start >> 4) + (sector.length() >> 12);
+        }
+        if (disk_location != location) {
+            // Header was not successfully written.
+            if constexpr (std::is_same_v<T, std::string_view>) {
+                if (mcc_written) {
+                    if (old_mcc_path.empty()) {
+                        // Delete the new mcc file.
+                        std::error_code e;
+                        std::filesystem::remove(mcc_path, e);
+                    } else {
+                        // Replace the new mcc file with the old one.
+                        std::error_code e;
+                        std::filesystem::rename(old_mcc_path, mcc_path, e);
+                    }
+                }
+            }
+            throw;
+        }
+        // The data was successfully written.
+        // Clear the old sector that would not be found on reload.
+        old_sector = std::nullopt;
     }
 
-    // Only do this after updating the header so that the file is always in a valid state.
+    if (!old_mcc_path.empty()) {
+        // Remove the old mcc file.
+        std::error_code e;
+        std::filesystem::remove(old_mcc_path, e);
+    }
+
     if (old_sector) {
-        if (mcc && !mcc_overwritten) {
-            // Delete the old external mcc file
-            std::filesystem::path mcc_path = dir / ("c." + std::to_string(cx) + "." + std::to_string(cz) + ".mcc");
-            if (std::filesystem::is_regular_file(mcc_path)) {
-                std::filesystem::remove(mcc_path);
-            }
-        }
         // Free the old sector
         sector_manager->free(*old_sector);
+        if constexpr (std::is_same_v<T, std::nullopt_t>) {
+            chunk_locations.erase(old_sector_it);
+        }
     }
 }
 
@@ -695,7 +839,7 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
 
     if (!mcc && data.size() + 4 > MaxRegionSize) {
         // Skip saving large chunks if mcc files are not enabled.
-        Amulet::warning(
+        throw std::runtime_error(
             "Could not save data to chunk "
             + std::to_string(cx)
             + ", "
@@ -791,62 +935,70 @@ void AnvilRegion::Impl::compact()
 
     create_open_region_file_if_closed();
 
-    while (!chunk_sectors.empty()) {
-        // While there are remaining sectors, get the first sector.
-        const auto [header_index, chunk_coordinate, sector] = *chunk_sectors.begin();
-        chunk_sectors.erase(chunk_sectors.begin());
+    try {
+        while (!chunk_sectors.empty()) {
+            // While there are remaining sectors, get the first sector.
+            const auto [header_index, chunk_coordinate, sector] = *chunk_sectors.begin();
+            chunk_sectors.erase(chunk_sectors.begin());
 
-        if (file_position == sector.start) {
-            // There isn't any space before the sector. Do nothing.
-            file_position = sector.stop;
-        } else {
-            // There is space before the sector
-            Sector new_sector;
-            if (file_position + sector.length() <= sector.start) {
-                // There is enough space before the sector to fit the whole sector.
-                // Copy it to the new location
-                new_sector = Sector(file_position, file_position + sector.length());
-                file_position = new_sector.stop;
+            if (file_position == sector.start) {
+                // There isn't any space before the sector. Do nothing.
+                file_position = sector.stop;
             } else {
-                // There is space before the sector but not enough to fit the sector.
-                // Move it to the end for processing later.
-                new_sector = Sector(file_end, file_end + sector.length());
-                file_end = new_sector.stop;
-                chunk_sectors.emplace(header_index, chunk_coordinate, new_sector);
-            }
+                // There is space before the sector
+                Sector new_sector;
+                if (file_position + sector.length() <= sector.start) {
+                    // There is enough space before the sector to fit the whole sector.
+                    // Copy it to the new location
+                    new_sector = Sector(file_position, file_position + sector.length());
+                    file_position = new_sector.stop;
+                } else {
+                    // There is space before the sector but not enough to fit the sector.
+                    // Move it to the end for processing later.
+                    new_sector = Sector(file_end, file_end + sector.length());
+                    file_end = new_sector.stop;
+                    chunk_sectors.emplace(header_index, chunk_coordinate, new_sector);
+                }
 
-            // Read in the data
-            std::string data(sector.length(), 0);
-            if (!regionf.seekg(sector.start)) {
-                throw std::runtime_error("Failed seeking to data in region file " + path.string());
-            }
-            if (!regionf.read(data.data(), data.size())) {
-                throw std::runtime_error("Failed reading data from region file " + path.string());
-            }
+                // Read in the data
+                std::string data(sector.length(), 0);
+                if (!regionf.seekg(sector.start)) {
+                    throw std::runtime_error("Failed seeking to data in region file " + path.string());
+                }
+                if (!regionf.read(data.data(), data.size())) {
+                    throw std::runtime_error("Failed reading data from region file " + path.string());
+                }
 
-            // Reserve and write the data to the new sector
-            sector_manager->reserve(new_sector);
-            if (!regionf.seekp(new_sector.start)) {
-                throw std::runtime_error("Failed seeking to new sector in region file " + path.string());
-            }
-            if (!regionf.write(data.data(), data.size())) {
-                throw std::runtime_error("Failed writing data to region file " + path.string());
-            }
+                // Reserve and write the data to the new sector
+                sector_manager->reserve(new_sector);
+                if (!regionf.seekp(new_sector.start)) {
+                    throw std::runtime_error("Failed seeking to new sector in region file " + path.string());
+                }
+                if (!regionf.write(data.data(), data.size())) {
+                    throw std::runtime_error("Failed writing data to region file " + path.string());
+                }
 
-            // Update the index
-            std::uint32_t location = static_cast<std::uint32_t>((new_sector.start >> 4) + (new_sector.length() >> 12));
-            big_endian_swap(location);
-            if (!regionf.seekp(header_index)) {
-                throw std::runtime_error("Failed seeking to header index in region file " + path.string());
-            }
-            if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
-                throw std::runtime_error("Failed writing location to region file " + path.string());
-            }
+                // Update the index
+                std::uint32_t location = static_cast<std::uint32_t>((new_sector.start >> 4) + (new_sector.length() >> 12));
+                big_endian_swap(location);
+                if (!regionf.seekp(header_index)) {
+                    throw std::runtime_error("Failed seeking to header index in region file " + path.string());
+                }
+                if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
+                    throw std::runtime_error("Failed writing location to region file " + path.string());
+                }
 
-            // Update internal state
-            chunk_locations[chunk_coordinate] = new_sector;
-            sector_manager->free(sector);
+                // Update internal state
+                chunk_locations[chunk_coordinate] = new_sector;
+                sector_manager->free(sector);
+            }
         }
+        if (!regionf.flush()) {
+            throw std::runtime_error("Failed flushing region file " + path.string());
+        }
+    } catch (...) {
+        _close_and_clear();
+        throw;
     }
     _close();
     // Delete any unused data at the end.
