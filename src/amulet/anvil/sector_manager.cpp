@@ -84,7 +84,7 @@ void SectorManager::reserve(const Sector& sector)
     if (sector.length() == 0) {
         throw std::invalid_argument("Cannot reserve a sector with zero length.");
     }
-    if (_stop <= sector.start && (_free_size.empty() || _free_size.rbegin()->stop != _stop)) {
+    if (_stop <= sector.start && (_free_start.empty() || _free_start.rbegin()->stop != _stop)) {
         // Sector starts beyond the end and the last sector is reserved.
         if (_resizable) {
             _free_start.emplace(_stop, sector.stop);
