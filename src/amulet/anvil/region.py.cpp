@@ -166,6 +166,7 @@ py::module init_anvil_region(py::module m_parent)
     AnvilRegion.def(
         "is_destroyed",
         &Amulet::AnvilRegion::is_destroyed,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Has the instance been destroyed.\n"
                 "If this is false, other calls will fail.\n"
                 "External Read:SharedReadWrite lock required."));

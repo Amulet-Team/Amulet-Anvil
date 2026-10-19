@@ -73,6 +73,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("rx"),
         py::arg("rz"),
         py::arg("create") = false,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.\n"
                 "Will throw RegionDoesNotExist if create is false and the region does not exist.\n"
                 "External Read::SharedReadWrite lock required if only calling Read methods on AnvilRegion.\n"
@@ -83,6 +84,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("cx"),
         py::arg("cz"),
         py::arg("create") = false,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.\n"
                 "Will throw RegionDoesNotExist if create is false and the region does not exist.\n"
                 "External Read::SharedReadWrite lock required if only calling Read methods on AnvilRegion.\n"
@@ -102,6 +104,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimensionLayer::has_chunk,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Check if the chunk has data in this layer.\n"
                 "External Read::SharedReadWrite lock required.\n"
                 "External Read::SharedReadOnly lock optional."));
@@ -110,6 +113,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimensionLayer::get_chunk_data,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc(
             "Get a NamedTag of a chunk from the database.\n"
             "Will raise RegionEntryDoesNotExist if the region or chunk does not exist\n"
@@ -120,6 +124,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("cx"),
         py::arg("cz"),
         py::arg("tag"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Set the chunk data for this layer.\n"
                 "External ReadWrite::SharedReadWrite lock required."));
     AnvilDimensionLayer.def(
@@ -127,11 +132,13 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimensionLayer::delete_chunk,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Delete the chunk data from this layer.\n"
                 "External ReadWrite::SharedReadWrite lock required."));
     AnvilDimensionLayer.def(
         "compact",
         &Amulet::AnvilDimensionLayer::compact,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Defragment the region files and remove unused region files.\n"
                 "External ReadWrite::SharedReadOnly lock required."));
     AnvilDimensionLayer.def(
@@ -145,6 +152,7 @@ py::module init_anvil_dimension(py::module m_parent)
     AnvilDimensionLayer.def(
         "is_destroyed",
         &Amulet::AnvilDimensionLayer::is_destroyed,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Has the instance been destroyed.\n"
                 "If this is false, other calls will fail.\n"
                 "External Read:SharedReadWrite lock required."));
@@ -180,7 +188,10 @@ py::module init_anvil_dimension(py::module m_parent)
                 "Thread safe."));
     AnvilDimension.def_property_readonly(
         "layer_names",
-        &Amulet::AnvilDimension::layer_names,
+        [](Amulet::AnvilDimension& self) {
+            py::gil_scoped_release nogil;
+            return self.layer_names();
+        },
         py::doc("Get the names of all layers in this dimension.\n"
                 "External Read::SharedReadWrite lock required.\n"
                 "External Read::SharedReadOnly lock optional."));
@@ -188,6 +199,7 @@ py::module init_anvil_dimension(py::module m_parent)
         "has_layer",
         &Amulet::AnvilDimension::has_layer,
         py::arg("layer_name"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Check if this dimension has the requested layer.\n"
                 "External Read::SharedReadWrite lock required.\n"
                 "External Read::SharedReadOnly lock optional."));
@@ -196,6 +208,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimension::get_layer,
         py::arg("layer_name"),
         py::arg("create") = false,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Get the AnvilDimensionLayer for a specific layer. The returned value must not be stored long-term.\n"
                 "If create=true the layer will be created if it doesn't exist.\n"
                 "External Read::SharedReadWrite lock required if only calling Read methods on AnvilDimensionLayer.\n"
@@ -215,6 +228,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimension::has_chunk,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Check if a chunk exists.\n"
                 "External Read::SharedReadWrite lock required.\n"
                 "External Read::SharedReadOnly lock optional."));
@@ -223,11 +237,21 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimension::get_chunk_data,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Get the data for a chunk\n"
                 "External Read::SharedReadWrite lock required."));
     AnvilDimension.def(
         "set_chunk_data",
-        &Amulet::AnvilDimension::set_chunk_data<Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, Amulet::NBT::NamedTag>>>,
+        [](Amulet::AnvilDimension& self, std::int64_t cx, std::int64_t cz, Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, Amulet::NBT::NamedTag>> py_data_layers) {
+            std::vector<std::pair<std::string, Amulet::NBT::NamedTag>> data_layers;
+            for (const auto& pair : py_data_layers) {
+                data_layers.push_back(pair);
+            }
+            {
+                py::gil_scoped_release nogil;
+                self.set_chunk_data(cx, cz, data_layers);
+            }
+        },
         py::arg("cx"),
         py::arg("cz"),
         py::arg("data_layers"),
@@ -238,11 +262,13 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimension::delete_chunk,
         py::arg("cx"),
         py::arg("cz"),
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Delete all data for the given chunk.\n"
                 "External ReadWrite::SharedReadWrite lock required."));
     AnvilDimension.def(
         "compact",
         &Amulet::AnvilDimension::compact,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Defragment the region files and remove unused region files.\n"
                 "External ReadWrite::SharedReadOnly lock required."));
     AnvilDimension.def(
@@ -256,6 +282,7 @@ py::module init_anvil_dimension(py::module m_parent)
     AnvilDimension.def(
         "is_destroyed",
         &Amulet::AnvilDimension::is_destroyed,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Has the instance been destroyed.\n"
                 "If this is false, other calls will fail.\n"
                 "External Read:SharedReadWrite lock required."));
