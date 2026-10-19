@@ -52,7 +52,7 @@ Sector SectorManager::reserve_space(size_t length)
     if (length == 0) {
         throw std::invalid_argument("Cannot reserve a sector with zero length.");
     }
-    auto it = _free_size.upper_bound(Sector(0, length));
+    auto it = _free_size.lower_bound(Sector(0, length));
     if (it != _free_size.end()) {
         // There exists a section large enough to fit the length
         Sector free_sector = *it;
