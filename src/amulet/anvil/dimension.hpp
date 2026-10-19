@@ -43,6 +43,10 @@ public:
 
     AnvilRegionCoordIterator();
     AnvilRegionCoordIterator(const std::filesystem::path&);
+    AnvilRegionCoordIterator(const AnvilRegionCoordIterator&) = delete;
+    AnvilRegionCoordIterator(AnvilRegionCoordIterator&&) = default;
+    AnvilRegionCoordIterator& operator=(const AnvilRegionCoordIterator&) = delete;
+    AnvilRegionCoordIterator& operator=(AnvilRegionCoordIterator&&) = default;
     const std::pair<std::int64_t, std::int64_t>& operator*() const;
     AnvilRegionCoordIterator& operator++();
     void operator++(int);
@@ -74,6 +78,10 @@ public:
 
     AnvilChunkCoordIterator();
     AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer>);
+    AnvilChunkCoordIterator(const AnvilChunkCoordIterator&) = delete;
+    AnvilChunkCoordIterator(AnvilChunkCoordIterator&&) = default;
+    AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
+    AnvilChunkCoordIterator& operator=(AnvilChunkCoordIterator&&) = default;
     std::pair<std::int64_t, std::int64_t> operator*() const;
     AnvilChunkCoordIterator& operator++();
     void operator++(int);
