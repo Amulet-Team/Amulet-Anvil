@@ -161,6 +161,20 @@ AnvilDimensionLayer::~AnvilDimensionLayer()
     destroy();
 }
 
+bool AnvilDimensionLayer::is_valid_layer_name(const std::string& layer_name) {
+    if (layer_name.empty()) {
+        // Must contain at least one character
+        return false;
+    }
+    for (auto c : layer_name) {
+        if (!(('a' <= c && c <= 'z') || c == '_')) {
+            // All characters must be a-z or _
+            return false;
+        }
+    }
+    return true;
+}
+
 // Accessors
 
 Amulet::OrderedMutex& AnvilDimensionLayer::get_mutex() { return _public_mutex; }
@@ -376,6 +390,9 @@ std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string
         // Find the layer
         auto it = _layers.find(layer_name);
         if (it == _layers.end()) {
+            if (!AnvilDimensionLayer::is_valid_layer_name(layer_name)) {
+                throw std::invalid_argument("Anvil layer " + layer_name + " contains characters not matching [_a-z]");
+            }
             // Initialise it if it did not exist.
             it = _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first;
         }

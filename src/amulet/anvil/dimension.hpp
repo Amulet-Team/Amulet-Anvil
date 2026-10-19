@@ -110,6 +110,8 @@ public:
     // Destructor
     ~AnvilDimensionLayer();
 
+    static bool is_valid_layer_name(const std::string& name);
+
     // Accessors
 
     // External mutex.
@@ -223,6 +225,10 @@ public:
                   std::map<std::string, std::shared_ptr<AnvilDimensionLayer>> layers;
                   std::shared_ptr<AnvilDimensionLayer> default_layer;
                   for (const auto& layer_name : layer_names) {
+                      if (!AnvilDimensionLayer::is_valid_layer_name(layer_name)) {
+                          error("Anvil layer " + layer_name + " contains characters not matching [_a-z]");
+                          continue;
+                      }
                       auto layer = std::make_shared<AnvilDimensionLayer>(directory / layer_name, mcc);
                       if (!default_layer) {
                           default_layer = layer;
@@ -318,12 +324,12 @@ public:
             } else {
                 if constexpr (std::is_same_v<TagT, std::optional<Amulet::NBT::NamedTag>>) {
                     if (!data) {
-                        // Do nothing because we were going to delte the data but the layer does not exist.
+                        // Do nothing because we were going to delete the data but the layer does not exist.
                         continue;
                     }
                 }
-                if (!std::all_of(layer_name.begin(), layer_name.end(), [](char c) { return 0x61 <= c && c <= 0x7A; })) {
-                    error("Anvil layer " + layer_name + " contains characters not in the range a-z");
+                if (!AnvilDimensionLayer::is_valid_layer_name(layer_name)) {
+                    error("Anvil layer " + layer_name + " contains characters not matching [_a-z]");
                     continue;
                 }
                 missing = true;
