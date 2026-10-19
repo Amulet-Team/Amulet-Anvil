@@ -345,11 +345,11 @@ public:
                     if (!layer_ptr) {
                         const auto& [layer_name, data] = data_layers_it;
                         // The layer may have been created by another thread while we were waiting for the lock.
-                        auto& layer_ptr_ref = _layers[layer_name];
-                        if (!layer_ptr_ref) {
-                            layer_ptr_ref = std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc);
+                        auto it = _layers.find(layer_name);
+                        if (it == _layers.end()) {
+                            it = _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first;
                         }
-                        layer_ptr = layer_ptr_ref;
+                        layer_ptr = it->second;
                     }
                 }
             }

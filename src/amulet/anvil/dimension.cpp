@@ -374,12 +374,12 @@ std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string
             throw std::runtime_error("This AnvilDimension instance has been destroyed.");
         }
         // Find the layer
-        auto& layer_ptr = _layers[layer_name];
-        if (!layer_ptr) {
+        auto it = _layers.find(layer_name);
+        if (it == _layers.end()) {
             // Initialise it if it did not exist.
-            layer_ptr = std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc);
+            it = _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first;
         }
-        return layer_ptr;
+        return it->second;
     }
 }
 
