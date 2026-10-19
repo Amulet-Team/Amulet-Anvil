@@ -28,8 +28,8 @@ class AnvilRegion:
         self,
         directory: str,
         file_name: str,
-        rx: typing.SupportsInt,
-        rz: typing.SupportsInt,
+        rx: typing.SupportsInt | typing.SupportsIndex,
+        rz: typing.SupportsInt | typing.SupportsIndex,
         mcc: bool = False,
     ) -> None:
         """
@@ -40,8 +40,8 @@ class AnvilRegion:
     def __init__(
         self,
         directory: str,
-        rx: typing.SupportsInt,
-        rz: typing.SupportsInt,
+        rx: typing.SupportsInt | typing.SupportsIndex,
+        rz: typing.SupportsInt | typing.SupportsIndex,
         mcc: bool = False,
     ) -> None:
         """
@@ -72,7 +72,11 @@ class AnvilRegion:
         External ReadWrite:SharedReadWrite lock required.
         """
 
-    def contains(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
+    def contains(
+        self,
+        cx: typing.SupportsInt | typing.SupportsIndex,
+        cz: typing.SupportsInt | typing.SupportsIndex,
+    ) -> bool:
         """
         Is the coordinate in the region.
         This returns true even if there is no value for the coordinate.
@@ -82,7 +86,12 @@ class AnvilRegion:
 
     def delete_batch(
         self,
-        coords: collections.abc.Sequence[tuple[typing.SupportsInt, typing.SupportsInt]],
+        coords: collections.abc.Sequence[
+            tuple[
+                typing.SupportsInt | typing.SupportsIndex,
+                typing.SupportsInt | typing.SupportsIndex,
+            ]
+        ],
     ) -> None:
         """
         Delete multiple chunk's data.
@@ -90,7 +99,11 @@ class AnvilRegion:
         External ReadWrite:SharedReadWrite lock required.
         """
 
-    def delete_value(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> None:
+    def delete_value(
+        self,
+        cx: typing.SupportsInt | typing.SupportsIndex,
+        cz: typing.SupportsInt | typing.SupportsIndex,
+    ) -> None:
         """
         Delete the chunk data.
         Coordinates are in world space.
@@ -123,7 +136,9 @@ class AnvilRegion:
         """
 
     def get_value(
-        self, cx: typing.SupportsInt, cz: typing.SupportsInt
+        self,
+        cx: typing.SupportsInt | typing.SupportsIndex,
+        cz: typing.SupportsInt | typing.SupportsIndex,
     ) -> amulet.nbt.NamedTag:
         """
         Get the value for this coordinate.
@@ -131,7 +146,11 @@ class AnvilRegion:
         External Read:SharedReadWrite lock required.
         """
 
-    def has_value(self, cx: typing.SupportsInt, cz: typing.SupportsInt) -> bool:
+    def has_value(
+        self,
+        cx: typing.SupportsInt | typing.SupportsIndex,
+        cz: typing.SupportsInt | typing.SupportsIndex,
+    ) -> bool:
         """
         Is there a value stored for this coordinate.
         Coordinates are in world space.
@@ -147,7 +166,10 @@ class AnvilRegion:
         """
 
     def set_value(
-        self, cx: typing.SupportsInt, cz: typing.SupportsInt, tag: amulet.nbt.NamedTag
+        self,
+        cx: typing.SupportsInt | typing.SupportsIndex,
+        cz: typing.SupportsInt | typing.SupportsIndex,
+        tag: amulet.nbt.NamedTag,
     ) -> None:
         """
         Set the value for this coordinate.
