@@ -19,21 +19,21 @@ class AnvilDimensionLayer:
     def all_chunk_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         An iterator of all chunk coordinates in this layer.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def all_region_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         An iterator of all region coordinates in this layer.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def compact(self) -> None:
         """
         Defragment the region files and remove unused region files.
-        External ReadWrite::SharedReadOnly lock required.
+        External ReadWrite:SharedReadOnly lock required.
         """
 
     def delete_chunk(
@@ -43,7 +43,7 @@ class AnvilDimensionLayer:
     ) -> None:
         """
         Delete the chunk data from this layer.
-        External ReadWrite::SharedReadWrite lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     def destroy(self) -> None:
@@ -62,7 +62,7 @@ class AnvilDimensionLayer:
         """
         Get a NamedTag of a chunk from the database.
         Will raise RegionEntryDoesNotExist if the region or chunk does not exist
-        External Read::SharedReadWrite lock required.
+        External Read:SharedReadWrite lock required.
         """
 
     def get_region(
@@ -74,8 +74,8 @@ class AnvilDimensionLayer:
         """
         Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
         Will throw RegionDoesNotExist if create is false and the region does not exist.
-        External Read::SharedReadWrite lock required if only calling Read methods on AnvilRegion.
-        External ReadWrite::SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
+        External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.
+        External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
         """
 
     def get_region_at_chunk(
@@ -87,8 +87,8 @@ class AnvilDimensionLayer:
         """
         Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
         Will throw RegionDoesNotExist if create is false and the region does not exist.
-        External Read::SharedReadWrite lock required if only calling Read methods on AnvilRegion.
-        External ReadWrite::SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
+        External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.
+        External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
         """
 
     def has_chunk(
@@ -98,8 +98,8 @@ class AnvilDimensionLayer:
     ) -> bool:
         """
         Check if the chunk has data in this layer.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def has_region(
@@ -109,8 +109,8 @@ class AnvilDimensionLayer:
     ) -> bool:
         """
         Check if a region file exists in this layer at given the coordinates.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def has_region_at_chunk(
@@ -120,8 +120,8 @@ class AnvilDimensionLayer:
     ) -> bool:
         """
         Check if a region file exists in this layer that contains the given chunk.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def is_destroyed(self) -> bool:
@@ -139,7 +139,7 @@ class AnvilDimensionLayer:
     ) -> None:
         """
         Set the chunk data for this layer.
-        External ReadWrite::SharedReadWrite lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     @property
@@ -178,14 +178,14 @@ class AnvilDimension:
     def all_chunk_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         Get an iterator for all the chunks that exist in this dimension.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def compact(self) -> None:
         """
         Defragment the region files and remove unused region files.
-        External ReadWrite::SharedReadOnly lock required.
+        External ReadWrite:SharedReadOnly lock required.
         """
 
     def delete_chunk(
@@ -195,7 +195,7 @@ class AnvilDimension:
     ) -> None:
         """
         Delete all data for the given chunk.
-        External ReadWrite::SharedReadWrite lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     def destroy(self) -> None:
@@ -213,15 +213,15 @@ class AnvilDimension:
     ) -> dict[str, amulet.nbt.NamedTag]:
         """
         Get the data for a chunk
-        External Read::SharedReadWrite lock required.
+        External Read:SharedReadWrite lock required.
         """
 
     def get_layer(self, layer_name: str, create: bool = False) -> AnvilDimensionLayer:
         """
         Get the AnvilDimensionLayer for a specific layer. The returned value must not be stored long-term.
         If create=true the layer will be created if it doesn't exist.
-        External Read::SharedReadWrite lock required if only calling Read methods on AnvilDimensionLayer.
-        External ReadWrite::SharedReadWrite lock required if create=true or calling ReadWrite methods on AnvilDimensionLayer.
+        External Read:SharedReadWrite lock required if only calling Read methods on AnvilDimensionLayer.
+        External ReadWrite:SharedReadWrite lock required if create=true or calling ReadWrite methods on AnvilDimensionLayer.
         """
 
     def has_chunk(
@@ -231,15 +231,15 @@ class AnvilDimension:
     ) -> bool:
         """
         Check if a chunk exists.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def has_layer(self, layer_name: str) -> bool:
         """
         Check if this dimension has the requested layer.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     def is_destroyed(self) -> bool:
@@ -257,7 +257,7 @@ class AnvilDimension:
     ) -> None:
         """
         Set the data for a chunk.
-        External ReadWrite::SharedReadWrite lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     @property
@@ -271,8 +271,8 @@ class AnvilDimension:
     def layer_names(self) -> list[str]:
         """
         Get the names of all layers in this dimension.
-        External Read::SharedReadWrite lock required.
-        External Read::SharedReadOnly lock optional.
+        External Read:SharedReadWrite lock required.
+        External Read:SharedReadOnly lock optional.
         """
 
     @property
