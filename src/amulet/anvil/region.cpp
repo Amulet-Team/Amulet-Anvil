@@ -46,11 +46,12 @@ static constexpr std::uint64_t MaxRegionSize = SectorSize * 255; // The maximum 
 static constexpr std::array<char, SectorSize * 2> EmptyHeader { };
 
 class FileCloserCache {
-private:
+public:
     using WeakImpl = std::weak_ptr<AnvilRegion::Impl>;
     using SharedCloser = std::shared_ptr<AnvilRegion::FileCloser>;
     using Pair = std::pair<WeakImpl, SharedCloser>;
 
+private:
     astd::mutex _mutex;
     const size_t _max_size;
     std::list<Pair> _values ASTD_GUARDED_BY(_mutex);
@@ -61,7 +62,8 @@ public:
         : _max_size(max_size) { };
 
     // Add an item.
-    void add(WeakImpl k, SharedCloser v) ASTD_EXCLUDES_ALL(_mutex)
+    // Returns any closers evicted from the cache. These must be deleted without the lock.
+    [[nodiscard]] std::list<Pair> add(WeakImpl k, SharedCloser v) ASTD_EXCLUDES_ALL(_mutex)
     {
         std::list<Pair> released_closers;
         astd::lock_guard lock(_mutex);
@@ -86,6 +88,7 @@ public:
             // Move the value to the end.
             _values.splice(_values.end(), _values, it->second);
         }
+        return released_closers;
     };
 
     // Remove an item.
@@ -249,11 +252,13 @@ public:
     // External Read:SharedReadWrite lock required.
     bool is_destroyed() ASTD_EXCLUDES_ALL(mutex);
 
+    using CloserAndEvicted = std::pair<std::shared_ptr<FileCloser>, std::list<FileCloserCache::Pair>>;
+
     // Get the object responsible for closing the region file.
     // When this object is deleted it will close the region file
     // This means that holding a reference to this will delay when the region file is closed.
     // The region file may still be closed manually before this object is deleted.
-    std::shared_ptr<FileCloser> _get_file_closer() ASTD_REQUIRES_UNIQUE(mutex);
+    CloserAndEvicted _get_file_closer_and_evicted() ASTD_REQUIRES_UNIQUE(mutex);
     std::shared_ptr<FileCloser> get_file_closer() ASTD_EXCLUDES_ALL(mutex);
 };
 
@@ -422,8 +427,9 @@ bool AnvilRegion::Impl::is_destroyed()
 
 std::vector<std::pair<std::int64_t, std::int64_t>> AnvilRegion::Impl::get_coords()
 {
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     std::vector<std::pair<std::int64_t, std::int64_t>> coords;
     coords.reserve(chunk_locations.size());
@@ -449,8 +455,9 @@ void AnvilRegion::Impl::validate_coord(std::int64_t cx, std::int64_t cz) const
 bool AnvilRegion::Impl::has_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     return chunk_locations.contains(std::make_pair(cx, cz));
 }
@@ -547,8 +554,9 @@ static NamedTag decompress(unsigned char compression_type, const std::string_vie
 NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::unique_lock lock(mutex);
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     auto it = chunk_locations.find(std::make_pair(cx, cz));
     if (it == chunk_locations.end()) {
@@ -850,8 +858,9 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
         return;
     }
 
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     create_open_region_file_if_closed();
     set_data<std::string_view>(cx, cz, data);
@@ -860,12 +869,13 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
 void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
 {
     validate_coord(cx, cz);
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     create_open_region_file_if_closed();
     set_data<std::nullopt_t>(cx, cz, std::nullopt);
@@ -873,12 +883,13 @@ void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
 
 void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
 {
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     create_open_region_file_if_closed();
 
@@ -891,13 +902,13 @@ void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::in
 
 void AnvilRegion::Impl::compact()
 {
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
     if (!std::filesystem::is_regular_file(path)) {
         // Do nothing if there is no file.
         return;
     }
-
-    auto closer = _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
     read_file_header();
     if (chunk_locations.empty()) {
         // No chunks in the region file. Delete it.
@@ -1005,21 +1016,24 @@ void AnvilRegion::Impl::compact()
     std::filesystem::resize_file(path, file_position);
 }
 
-std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::_get_file_closer()
+CloserAndEvicted AnvilRegion::Impl::_get_file_closer_and_evicted()
 {
+    std::list<FileCloserCache::Pair> evicted_closers;
     std::shared_ptr<AnvilRegion::FileCloser> file_closer = file_closer_ref.lock();
     if (!file_closer) {
         file_closer = std::make_shared<AnvilRegion::FileCloser>(shared_from_this());
         file_closer_ref = file_closer;
     }
-    region_file_cache.add(weak_from_this(), file_closer);
-    return file_closer;
+    evicted_closers = region_file_cache.add(weak_from_this(), file_closer);
+    return std::make_pair(std::move(file_closer), std::move(evicted_closers));
 }
 
 std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::get_file_closer()
 {
+    CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
-    return _get_file_closer();
+    closer_and_evicted = _get_file_closer_and_evicted();
+    return std::move(std::get<0>(closer_and_evicted));
 }
 
 // Constructors.
