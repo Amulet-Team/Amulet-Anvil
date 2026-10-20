@@ -1016,7 +1016,7 @@ void AnvilRegion::Impl::compact()
     std::filesystem::resize_file(path, file_position);
 }
 
-CloserAndEvicted AnvilRegion::Impl::_get_file_closer_and_evicted()
+AnvilRegion::Impl::CloserAndEvicted AnvilRegion::Impl::_get_file_closer_and_evicted()
 {
     std::list<FileCloserCache::Pair> evicted_closers;
     std::shared_ptr<AnvilRegion::FileCloser> file_closer = file_closer_ref.lock();
