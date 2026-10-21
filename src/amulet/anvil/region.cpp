@@ -107,7 +107,7 @@ static FileCloserCache region_file_cache(64);
 
 std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& filename)
 {
-    static const std::regex region_regex(R"(^r\.(\-?\d{1, 10})\.(\-?\d{1, 10})\.mca$)");
+    static const std::regex region_regex(R"(^r\.(\-?\d{1,10})\.(\-?\d{1,10})\.mca$)");
     std::smatch match;
     if (!std::regex_search(filename, match, region_regex)) {
         throw std::invalid_argument("Region filename is invalid.");
