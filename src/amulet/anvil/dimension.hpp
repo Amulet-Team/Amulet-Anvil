@@ -67,7 +67,7 @@ private:
     AnvilRegionCoordIterator _region_it;
     using coordsT = std::vector<std::pair<std::int64_t, std::int64_t>>;
     coordsT _coords;
-    coordsT::iterator _coord_it;
+    size_t _coord_index;
 
     void seek_to_valid();
     void seek_to_next_valid();

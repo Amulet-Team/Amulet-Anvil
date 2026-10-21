@@ -85,7 +85,7 @@ void AnvilChunkCoordIterator::seek_to_valid()
         }
         OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
         _coords = region->get_coords();
-        _coord_it = _coords.begin();
+        _coord_index = 0;
         if (!_coords.empty()) {
             return;
         }
@@ -94,10 +94,10 @@ void AnvilChunkCoordIterator::seek_to_valid()
 
 void AnvilChunkCoordIterator::seek_to_next_valid()
 {
-    if (_coord_it != _coords.end()) {
-        _coord_it++;
+    if (_coord_index < _coords.size()) {
+        _coord_index++;
     }
-    if (_coord_it == _coords.end()) {
+    if (_coord_index >= _coords.size()) {
         if (_region_it == AnvilRegionCoordIterator()) {
             return;
         }
@@ -115,14 +115,14 @@ AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<AnvilDimensionL
         }
         return layer; }())
     , _region_it(layer->all_region_coords())
-    , _coord_it(_coords.end())
+    , _coord_index(0)
 {
     seek_to_valid();
 }
 
 std::pair<std::int64_t, std::int64_t> AnvilChunkCoordIterator::operator*() const
 {
-    return *_coord_it;
+    return _coords[_coord_index];
 }
 
 AnvilChunkCoordIterator& AnvilChunkCoordIterator::operator++()
@@ -142,7 +142,7 @@ bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterato
     if (lhs._region_it == AnvilRegionCoordIterator()) {
         return rhs._region_it == AnvilRegionCoordIterator();
     } else {
-        return lhs._region_it == rhs._region_it && *lhs._coord_it == *rhs._coord_it;
+        return lhs._region_it == rhs._region_it && lhs._coords[lhs._coord_index] == rhs._coords[rhs._coord_index];
     }
 }
 
