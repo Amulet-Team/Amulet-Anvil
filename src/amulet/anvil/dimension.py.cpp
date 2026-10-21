@@ -43,7 +43,7 @@ py::module init_anvil_dimension(py::module m_parent)
                 "Thread safe."));
     AnvilDimensionLayer.def(
         "all_region_coords",
-        [](Amulet::AnvilDimensionLayer& self) {
+        [](Amulet::AnvilDimensionLayer& self) ASTD_NO_THREAD_SAFETY_ANALYSIS {
             return py::make_iterator(
                 self.all_region_coords(),
                 Amulet::AnvilRegionCoordIterator(),
