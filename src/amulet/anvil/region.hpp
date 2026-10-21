@@ -73,7 +73,7 @@ public:
     AnvilRegion(std::filesystem::path path, bool mcc = false);
 
     // Destructor
-    ~AnvilRegion();
+    virtual ~AnvilRegion();
 
     // Assignment operators
     AnvilRegion& operator=(const AnvilRegion&) = delete;

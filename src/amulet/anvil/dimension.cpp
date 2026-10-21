@@ -1,5 +1,8 @@
 #include <algorithm>
+#include <list>
+#include <map>
 #include <mutex>
+#include <vector>
 
 #include "dimension.hpp"
 #include "region.hpp"
@@ -142,12 +145,176 @@ bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterato
     }
 }
 
+class AnvilRegionStorage {
+public:
+    astd::mutex mutex;
+
+    bool destroyed ASTD_GUARDED_BY(mutex) = false;
+
+private:
+    struct Element;
+    struct StrongElement;
+
+    using LRUCache = std::list<StrongElement>;
+    using CoordToElement = std::map<std::pair<std::int64_t, std::int64_t>, Element>;
+
+    struct Element {
+        std::weak_ptr<Amulet::AnvilRegion> weak_region;
+        LRUCache::iterator lru_it;
+    };
+
+    struct StrongElement {
+        std::shared_ptr<Amulet::AnvilRegion> shared_region;
+        Element& element;
+    };
+
+    // Map from region coordinate to region weak ptr.
+    CoordToElement _coord_to_element ASTD_GUARDED_BY(mutex);
+
+    // LRU cache of regions
+    LRUCache _lru_cache ASTD_GUARDED_BY(mutex);
+
+public:
+    // Get the region from its coordinates. Also returns the region evicted from the cache. Either may be nullptr.
+    std::pair<std::shared_ptr<Amulet::AnvilRegion>, std::shared_ptr<Amulet::AnvilRegion>> get_region(std::int64_t rx, std::int64_t rz) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Add a new region. get_region must return a nullptr.
+    // Returns the AnvilRegion rejected from the cache which may be nullptr.
+    std::shared_ptr<Amulet::AnvilRegion> add_region(std::shared_ptr<Amulet::AnvilRegion>) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Remove the region.
+    void on_region_deleted(std::int64_t rx, std::int64_t rz) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Destroy all regions and clears data. Returns pointers to the regions so they can be deleted without the lock.
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> destroy() ASTD_REQUIRES_UNIQUE(mutex);
+};
+
+std::pair<std::shared_ptr<Amulet::AnvilRegion>, std::shared_ptr<Amulet::AnvilRegion>> AnvilRegionStorage::get_region(std::int64_t rx, std::int64_t rz)
+{
+    // Find the region Element.
+    const auto it = _coord_to_element.find(std::make_pair(rx, rz));
+    if (it != _coord_to_element.end()) {
+        // Element exists. Get region (may be nullptr)
+        auto& element = it->second;
+        auto region = element.weak_region.lock();
+        if (region) {
+            std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+            // If region exists, update LRU.
+            if (element.lru_it == _lru_cache.end()) {
+                // Not in LRU. Append.
+                _lru_cache.emplace_front(region, element);
+                element.lru_it = _lru_cache.begin();
+                if (_lru_cache.size() > 64) {
+                    // Limit LRU cache size.
+                    auto& evicted_element = _lru_cache.back();
+                    evicted_element.element.lru_it = _lru_cache.end();
+                    evicted_region = std::move(evicted_element.shared_region);
+                    _lru_cache.pop_back();
+                }
+            } else if (element.lru_it != _lru_cache.begin()) {
+                // Not the first element. Move to the front.
+                _lru_cache.splice(_lru_cache.begin(), _lru_cache, element.lru_it);
+            }
+            return { std::move(region), std::move(evicted_region) };
+        }
+    }
+    // Element does not exist.
+    return { nullptr, nullptr };
+}
+
+std::shared_ptr<Amulet::AnvilRegion> AnvilRegionStorage::add_region(std::shared_ptr<Amulet::AnvilRegion> region)
+{
+    auto coord = std::make_pair(region->rx(), region->rz());
+    auto& element = _coord_to_element[coord];
+    element.weak_region = region;
+    _lru_cache.emplace_front(region, element);
+    element.lru_it = _lru_cache.begin();
+
+    std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+    if (_lru_cache.size() > 64) {
+        // Limit LRU cache size.
+        auto& evicted_element = _lru_cache.back();
+        evicted_element.element.lru_it = _lru_cache.end();
+        evicted_region = std::move(evicted_element.shared_region);
+        _lru_cache.pop_back();
+    }
+    return evicted_region;
+}
+
+void AnvilRegionStorage::on_region_deleted(std::int64_t rx, std::int64_t rz)
+{
+    auto element_it = _coord_to_element.find({ rx, rz });
+    if (element_it != _coord_to_element.end() && element_it->second.weak_region.expired()) {
+        _coord_to_element.erase(element_it);
+    }
+}
+
+std::vector<std::shared_ptr<Amulet::AnvilRegion>> AnvilRegionStorage::destroy()
+{
+    // Find all regions that still exist.
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> regions;
+    for (auto& it : _coord_to_element) {
+        auto region_ptr = it.second.weak_region.lock();
+        if (region_ptr) {
+            regions.emplace_back(std::move(region_ptr));
+        }
+    }
+
+    destroyed = true;
+
+    // Clear memory
+    _coord_to_element.clear();
+    _lru_cache.clear();
+
+    // Destroy regions
+    for (auto& region_ptr : regions) {
+        auto& region = *region_ptr;
+        astd::lock_guard lock(region.get_mutex());
+        region.destroy();
+    }
+
+    // Return shared pointers so they can be deleted without the lock.
+    return regions;
+}
+
+// Subclass of AnvilRegion that unlinks itself upon deletion.
+class AnvilRegion2 : public AnvilRegion {
+    std::shared_ptr<AnvilRegionStorage> _shared;
+
+public:
+    AnvilRegion2(
+        std::shared_ptr<AnvilRegionStorage> shared,
+        const std::filesystem::path& directory,
+        std::int64_t rx, std::int64_t rz,
+        bool mcc);
+    ~AnvilRegion2() override;
+};
+
+AnvilRegion2::AnvilRegion2(
+    std::shared_ptr<AnvilRegionStorage> shared,
+    const std::filesystem::path& directory,
+    std::int64_t rx, std::int64_t rz,
+    bool mcc)
+    : AnvilRegion(directory, rx, rz, mcc)
+    , _shared(std::move(shared))
+{
+}
+
+AnvilRegion2::~AnvilRegion2()
+{
+    destroy();
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    shared.on_region_deleted(rx(), rz());
+}
+
 // AnvilDimensionLayer
 
 AnvilDimensionLayer::AnvilDimensionLayer(
     std::filesystem::path directory, bool mcc)
     : _directory(directory)
     , _mcc(mcc)
+    , _shared(std::make_shared<AnvilRegionStorage>())
 {
     if (!std::filesystem::exists(_directory)) {
         std::filesystem::create_directories(_directory);
@@ -210,34 +377,30 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
 {
     // Get the region key
     auto key = std::make_pair(rx, rz);
-    {
-        astd::shared_lock lock(_mutex);
-        if (destroyed) {
-            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
-        }
-        // Find the region
-        auto region_it = _regions.find(key);
-        if (region_it != _regions.end()) {
-            // Return if it already exists.
-            return region_it->second;
-        } else if (create or has_region(rx, rz)) {
-            // Try again in unique mode.
-        } else {
-            throw RegionDoesNotExist();
-        }
+    auto& shared = *_shared;
+
+    // Defined before lock so it is destroyed after.
+    std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+
+    astd::lock_guard lock(shared.mutex);
+    if (shared.destroyed) {
+        throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
     }
-    {
-        astd::lock_guard lock(_mutex);
-        if (destroyed) {
-            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
-        }
-        // Find the region
-        auto region_it = _regions.find(key);
-        if (region_it == _regions.end()) {
-            // Initialise it if it did not exist.
-            region_it = _regions.emplace(key, std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc)).first;
-        }
-        return region_it->second;
+
+    // Find the region
+    auto regions = shared.get_region(rx, rz);
+    std::shared_ptr<Amulet::AnvilRegion> region = std::move(std::get<0>(regions));
+    evicted_region = std::move(std::get<1>(regions));
+
+    if (region) {
+        // Return if it already exists.
+        return region;
+    } else if (create or has_region(rx, rz)) {
+        region = std::make_shared<AnvilRegion2>(_shared, _directory, rx, rz, _mcc);
+        evicted_region = shared.add_region(region);
+        return region;
+    } else {
+        throw RegionDoesNotExist();
     }
 }
 
@@ -310,22 +473,20 @@ void AnvilDimensionLayer::compact()
 
 void AnvilDimensionLayer::destroy()
 {
-    astd::lock_guard lock(_mutex);
-    destroyed = true;
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> evicted_regions;
 
-    // Destroy all region instances.
-    for (auto& it : _regions) {
-        auto& region = *it.second;
-        astd::lock_guard region_lock(region.get_mutex());
-        region.destroy();
-    }
-    _regions.clear();
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    shared.destroyed = true;
+
+    evicted_regions = shared.destroy();
 }
 
 bool AnvilDimensionLayer::is_destroyed()
 {
-    astd::lock_guard lock(_mutex);
-    return destroyed;
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    return shared.destroyed;
 }
 
 Amulet::OrderedMutex& AnvilDimension::get_mutex() { return _public_mutex; }
@@ -340,7 +501,7 @@ std::vector<std::string> AnvilDimension::layer_names()
     std::vector<std::string> layers;
     layers.reserve(_layers.size());
     for (const auto& node : _layers) {
-        layers.push_back(node.first);
+        layers.emplace_back(node.first);
     }
     return layers;
 }

@@ -92,6 +92,8 @@ AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilC
 
 static_assert(std::input_iterator<AnvilChunkCoordIterator>);
 
+class AnvilRegionStorage;
+
 // In the Anvil format chunk data is split into layers.
 // Historically there was only one layer but entity data was split into its own layer.
 
@@ -101,13 +103,7 @@ private:
     Amulet::OrderedMutex _public_mutex;
     const std::filesystem::path _directory;
     const bool _mcc;
-    astd::shared_mutex _mutex;
-    std::map<std::pair<std::int64_t, std::int64_t>, std::shared_ptr<Amulet::AnvilRegion>> _regions ASTD_GUARDED_BY(_mutex);
-    bool destroyed ASTD_GUARDED_BY(_mutex) = false;
-    // TODO: This never removes region objects.
-    // Perhaps _regions should store weak_ptr and a daque of shared_ptr to keep some alive.
-    // _regions can be periodically cleaned to remove dead weak_ptrs.
-
+    std::shared_ptr<AnvilRegionStorage> _shared;
 public:
     // Constructors
     AnvilDimensionLayer() = delete;
