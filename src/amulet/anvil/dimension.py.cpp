@@ -6,6 +6,8 @@
 
 #include <amulet/pybind11_extensions/collections.hpp>
 
+#include <amulet/utils/threading/thread_safety.hpp>
+
 #include "dimension.hpp"
 
 namespace py = pybind11;
@@ -221,7 +223,7 @@ py::module init_anvil_dimension(py::module m_parent)
         "all_chunk_coords",
         [](Amulet::AnvilDimension& self) {
             return py::make_iterator(
-                [](Amulet::AnvilDimension& self) {
+                [](Amulet::AnvilDimension& self) ASTD_NO_THREAD_SAFETY_ANALYSIS {
                     py::gil_scoped_release nogil;
                     return self.all_chunk_coords();
                 }(self),
