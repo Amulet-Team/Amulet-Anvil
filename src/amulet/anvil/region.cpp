@@ -913,6 +913,7 @@ void AnvilRegion::Impl::compact()
     if (chunk_locations.empty()) {
         // No chunks in the region file. Delete it.
         _close_if_open();
+        _clear();
         std::filesystem::remove(path);
         return;
     }
