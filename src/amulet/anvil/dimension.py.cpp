@@ -98,7 +98,7 @@ py::module init_anvil_dimension(py::module m_parent)
                 [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) {
                     py::gil_scoped_release nogil;
                     return Amulet::AnvilChunkCoordIterator(std::move(self));
-                },
+                }(std::move(self)),
                 Amulet::AnvilChunkCoordIterator(),
                 py::call_guard<py::gil_scoped_release>());
         },
