@@ -1014,6 +1014,7 @@ void AnvilRegion::Impl::compact()
         throw;
     }
     _close();
+    _clear();
     // Delete any unused data at the end.
     std::filesystem::resize_file(path, file_position);
 }
