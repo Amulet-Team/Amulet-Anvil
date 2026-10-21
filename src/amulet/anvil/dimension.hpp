@@ -139,64 +139,64 @@ public:
     // An iterator of all region coordinates in this layer.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    AnvilRegionCoordIterator all_region_coords() ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    AnvilRegionCoordIterator all_region_coords() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Check if a region file exists in this layer at given the coordinates.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_region(std::int64_t rx, std::int64_t rz) const ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    bool has_region(std::int64_t rx, std::int64_t rz) const ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Check if a region file exists in this layer that contains the given chunk.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_region_at_chunk(std::int64_t cx, std::int64_t cz) const ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    bool has_region_at_chunk(std::int64_t cx, std::int64_t cz) const ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get an AnvilRegion instance from its coordinates. This must not be stored long-term.
     // Will throw RegionDoesNotExist if create is false and the region does not exist.
     // External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.
     // External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
-    std::shared_ptr<AnvilRegion> get_region(std::int64_t rx, std::int64_t rz, bool create = false) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    std::shared_ptr<AnvilRegion> get_region(std::int64_t rx, std::int64_t rz, bool create = false) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
     // Will throw RegionDoesNotExist if create is false and the region does not exist.
     // External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.
     // External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.
-    std::shared_ptr<AnvilRegion> get_region_at_chunk(std::int64_t cx, std::int64_t cz, bool create = false) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    std::shared_ptr<AnvilRegion> get_region_at_chunk(std::int64_t cx, std::int64_t cz, bool create = false) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Chunk
 
     // Check if the chunk has data in this layer.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    bool has_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get the chunk data for this layer.
     // Will throw RegionEntryDoesNotExist if the chunk does not exist.
     // External Read:SharedReadWrite lock required.
-    Amulet::NBT::NamedTag get_chunk_data(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    Amulet::NBT::NamedTag get_chunk_data(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Set the chunk data for this layer.
     // External ReadWrite:SharedReadWrite lock required.
-    void set_chunk_data(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag&) ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
+    void set_chunk_data(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag&) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Delete the chunk data from this layer.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
+    void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Defragment the region files and remove unused region files.
     // External ReadWrite:SharedReadOnly lock required.
-    void compact() ASTD_REQUIRES(ReadWrite, SharedReadOnly, _public_mutex);
+    void compact() ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadOnly, _public_mutex);
 
     // Destroy the instance.
     // Calls made after this will fail.
     // This may only be called by the owner of the instance.
     // External ReadWrite:Unique lock required.
-    void destroy() ASTD_REQUIRES(ReadWrite, Unique, _public_mutex);
+    void destroy() ASTD_REQUIRES_COMPATIBLE(ReadWrite, Unique, _public_mutex);
 
     // Has the instance been destroyed.
     // If this is false, other calls will fail.
     // External Read:SharedReadWrite lock required.
-    bool is_destroyed() ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
+    bool is_destroyed() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 };
 
 template <typename Range, typename T>
