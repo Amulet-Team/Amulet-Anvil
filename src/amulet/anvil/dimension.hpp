@@ -184,8 +184,8 @@ public:
     void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Defragment the region files and remove unused region files.
-    // External ReadWrite:SharedReadOnly lock required.
-    void compact() ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadOnly, _public_mutex);
+    // External Read:SharedReadWrite lock required.
+    void compact() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Destroy the instance.
     // Calls made after this will fail.

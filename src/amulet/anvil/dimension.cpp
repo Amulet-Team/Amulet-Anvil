@@ -605,7 +605,7 @@ void AnvilDimension::compact()
     astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
-        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
+        OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
         layer.compact();
     }
 }
