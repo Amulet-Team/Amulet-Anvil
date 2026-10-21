@@ -99,7 +99,7 @@ public:
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    std::vector<std::pair<std::int64_t, std::int64_t>> get_coords();
+    std::vector<std::pair<std::int64_t, std::int64_t>> get_coords() ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
 
     // Is the coordinate in the region.
     // This returns true even if there is no value for the coordinate.
@@ -111,37 +111,37 @@ public:
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_value(std::int64_t cx, std::int64_t cz);
+    bool has_value(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
 
     // Get the value for this coordinate.
     // Coordinates are in world space.
     // External Read:SharedReadWrite lock required.
-    Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz);
+    Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
 
     // AMULET_ANVIL_EXPORT std::vector<std::optional<Amulet::NBT::NamedTag>> get_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
 
     // Set the value for this coordinate.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag);
+    void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag) ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
 
     // AMULET_ANVIL_EXPORT void set_batch(std::vector<std::tuple<std::int64_t, std::int64_t, Amulet::NBT::NamedTag>>& batch);
 
     // Delete the chunk data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_value(std::int64_t cx, std::int64_t cz);
+    void delete_value(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Delete multiple chunk's data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
+    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Compact the region file.
     // Defragments the file and deletes unused space.
     // If there are no chunks remaining in the region file it will be deleted.
     // External ReadWrite:SharedReadWrite lock required.
-    void compact();
+    void compact() ASTD_REQUIRES(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Close the file object if open.
     // This is automatically called when the instance is destroyed but may be called earlier.
@@ -152,12 +152,12 @@ public:
     // Calls made after this will fail.
     // This may only be called by the owner of the instance.
     // External ReadWrite:Unique lock required.
-    void destroy();
+    void destroy() ASTD_REQUIRES(ReadWrite, Unique, _public_mutex);
 
     // Has the instance been destroyed.
     // If this is false, other calls will fail.
     // External Read:SharedReadWrite lock required.
-    bool is_destroyed();
+    bool is_destroyed() ASTD_REQUIRES(Read, SharedReadWrite, _public_mutex);
 
     // Get the object responsible for closing the region file.
     // When this object is deleted it will close the region file
