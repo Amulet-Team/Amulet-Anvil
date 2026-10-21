@@ -95,11 +95,13 @@ py::module init_anvil_dimension(py::module m_parent)
         "all_chunk_coords",
         [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) {
             return py::make_iterator(
-                Amulet::AnvilChunkCoordIterator(std::move(self)),
+                [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) {
+                    py::gil_scoped_release nogil;
+                    return Amulet::AnvilChunkCoordIterator(std::move(self));
+                },
                 Amulet::AnvilChunkCoordIterator(),
                 py::call_guard<py::gil_scoped_release>());
         },
-        py::call_guard<py::gil_scoped_release>(),
         py::doc("An iterator of all chunk coordinates in this layer.\n"
                 "External Read:SharedReadWrite lock required.\n"
                 "External Read:SharedReadOnly lock optional."));
@@ -219,11 +221,13 @@ py::module init_anvil_dimension(py::module m_parent)
         "all_chunk_coords",
         [](Amulet::AnvilDimension& self) {
             return py::make_iterator(
-                self.all_chunk_coords(),
+                [](Amulet::AnvilDimension& self) {
+                    py::gil_scoped_release nogil;
+                    return self.all_chunk_coords();
+                }(self),
                 Amulet::AnvilChunkCoordIterator(),
                 py::call_guard<py::gil_scoped_release>());
         },
-        py::call_guard<py::gil_scoped_release>(),
         py::doc("Get an iterator for all the chunks that exist in this dimension.\n"
                 "External Read:SharedReadWrite lock required.\n"
                 "External Read:SharedReadOnly lock optional."));
