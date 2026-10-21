@@ -1,5 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl/filesystem.h>
+
+#include <filesystem>
 
 #include "region.hpp"
 
@@ -24,7 +27,7 @@ py::module init_anvil_region(py::module m_parent)
 
     AnvilRegion.def(
         py::init(
-            [](std::string directory, std::string file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
+            [](std::filesystem::path directory, std::string file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(directory, file_name, rx, rz, mcc);
             }),
         py::arg("directory"),
@@ -35,7 +38,7 @@ py::module init_anvil_region(py::module m_parent)
         py::doc("Construct from the directory path, name of the file and region coordinates."));
     AnvilRegion.def(
         py::init(
-            [](std::string directory, std::int64_t rx, std::int64_t rz, bool mcc) {
+            [](std::filesystem::path directory, std::int64_t rx, std::int64_t rz, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(directory, rx, rz, mcc);
             }),
         py::arg("directory"),
@@ -46,7 +49,7 @@ py::module init_anvil_region(py::module m_parent)
                 "File name is computed from region coordinates."));
     AnvilRegion.def(
         py::init(
-            [](std::string path, bool mcc) {
+            [](std::filesystem::path path, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(path, mcc);
             }),
         py::arg("path"),

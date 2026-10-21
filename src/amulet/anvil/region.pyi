@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import os
 import typing
 
 import amulet.nbt
@@ -26,7 +27,7 @@ class AnvilRegion:
     @typing.overload
     def __init__(
         self,
-        directory: str,
+        directory: os.PathLike | str | bytes,
         file_name: str,
         rx: typing.SupportsInt | typing.SupportsIndex,
         rz: typing.SupportsInt | typing.SupportsIndex,
@@ -39,7 +40,7 @@ class AnvilRegion:
     @typing.overload
     def __init__(
         self,
-        directory: str,
+        directory: os.PathLike | str | bytes,
         rx: typing.SupportsInt | typing.SupportsIndex,
         rz: typing.SupportsInt | typing.SupportsIndex,
         mcc: bool = False,
@@ -50,7 +51,7 @@ class AnvilRegion:
         """
 
     @typing.overload
-    def __init__(self, path: str, mcc: bool = False) -> None:
+    def __init__(self, path: os.PathLike | str | bytes, mcc: bool = False) -> None:
         """
         Construct from the path to the region file.
         Coordinates are computed from the file name.

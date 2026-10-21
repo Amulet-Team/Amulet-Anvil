@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import os
 import types
 import typing
 
@@ -15,7 +16,9 @@ class AnvilDimensionLayer:
     A class to manage a directory of region files.
     """
 
-    def __init__(self, directory: str, mcc: bool = False) -> None: ...
+    def __init__(
+        self, directory: os.PathLike | str | bytes, mcc: bool = False
+    ) -> None: ...
     def all_chunk_coords(self) -> collections.abc.Iterator[tuple[int, int]]:
         """
         An iterator of all chunk coordinates in this layer.

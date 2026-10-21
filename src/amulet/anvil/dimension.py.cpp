@@ -1,5 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl/filesystem.h>
+
+#include <filesystem>
 
 #include <amulet/pybind11_extensions/collections.hpp>
 
@@ -16,7 +19,7 @@ py::module init_anvil_dimension(py::module m_parent)
         "A class to manage a directory of region files.");
     AnvilDimensionLayer.def(
         py::init(
-            [](std::string directory, bool mcc) {
+            [](std::filesystem::path directory, bool mcc) {
                 return std::make_shared<Amulet::AnvilDimensionLayer>(directory, mcc);
             }),
         py::arg("directory"),
