@@ -104,6 +104,7 @@ private:
     const std::filesystem::path _directory;
     const bool _mcc;
     std::shared_ptr<AnvilRegionStorage> _shared;
+
 public:
     // Constructors
     AnvilDimensionLayer() = delete;

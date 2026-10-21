@@ -16,7 +16,7 @@ py::module init_anvil_dimension(py::module m_parent)
 
     py::classh<Amulet::AnvilDimensionLayer>
         AnvilDimensionLayer(m, "AnvilDimensionLayer", py::release_gil_before_calling_cpp_dtor(),
-        "A class to manage a directory of region files.");
+            "A class to manage a directory of region files.");
     AnvilDimensionLayer.def(
         py::init(
             [](std::filesystem::path directory, bool mcc) {
@@ -165,8 +165,8 @@ py::module init_anvil_dimension(py::module m_parent)
 
     py::classh<Amulet::AnvilDimension>
         AnvilDimension(m, "AnvilDimension", py::release_gil_before_calling_cpp_dtor(),
-        "A class to manage the data for a dimension.\n"
-        "This can consist of multiple layers. Eg the region layer which contains chunk data and the entities layer which contains entities.");
+            "A class to manage the data for a dimension.\n"
+            "This can consist of multiple layers. Eg the region layer which contains chunk data and the entities layer which contains entities.");
     AnvilDimension.def(
         py::init(
             [](std::filesystem::path directory, Amulet::pybind11_extensions::collections::Iterable<std::string> layer_names, bool mcc) {
