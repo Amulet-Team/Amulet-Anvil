@@ -75,6 +75,7 @@ void AnvilChunkCoordIterator::seek_to_valid()
                 throw std::runtime_error("layer attached to AnvilChunkCoordIterator has been destroyed.");
             }
         }
+        OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer->get_mutex());
         const auto& [rx, rz] = *_region_it;
         std::shared_ptr<AnvilRegion> region;
         try {
