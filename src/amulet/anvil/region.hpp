@@ -81,7 +81,7 @@ public:
 
     // A mutex which can be used to synchronise calls.
     // Thread safe.
-    Amulet::OrderedMutex& get_mutex();
+    Amulet::OrderedMutex& get_mutex() ASTD_RETURN_CAPABILITY(_public_mutex);
 
     // The path of the region file.
     // Thread safe.

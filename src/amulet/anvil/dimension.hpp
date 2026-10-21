@@ -120,7 +120,7 @@ public:
 
     // External mutex.
     // Thread safe.
-    Amulet::OrderedMutex& get_mutex();
+    Amulet::OrderedMutex& get_mutex() ASTD_RETURN_CAPABILITY(_public_mutex);
 
     // The directory this instance manages.
     // Thread safe.
@@ -253,7 +253,7 @@ public:
 
     // External mutex.
     // Thread safe.
-    Amulet::OrderedMutex& get_mutex();
+    Amulet::OrderedMutex& get_mutex() ASTD_RETURN_CAPABILITY(_public_mutex);
 
     // The directory this dimension is in.
     // Thread safe.
