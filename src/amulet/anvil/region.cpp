@@ -184,9 +184,9 @@ public:
     // This is automatically called when the instance is destroyed but may be called earlier.
     void _close_if_open() ASTD_REQUIRES_UNIQUE(mutex);
 
-    // Close the file object and clear cached data.
+    // Clear cached data.
     // Use this if a header write failed to ensure the cached data mirrors the file.
-    void _close_and_clear() ASTD_REQUIRES_UNIQUE(mutex);
+    void _clear() ASTD_REQUIRES_UNIQUE(mutex);
 
     // Get the coordinates of all values in the region file.
     // Coordinates are in world space.
@@ -397,9 +397,8 @@ void AnvilRegion::Impl::_close_if_open()
     region_file_cache.remove(weak_from_this());
 }
 
-void AnvilRegion::Impl::_close_and_clear()
+void AnvilRegion::Impl::_clear()
 {
-    _close();
     sector_manager = std::nullopt;
     chunk_locations.clear();
 }
@@ -781,7 +780,8 @@ void AnvilRegion::Impl::set_data(std::int64_t cx, std::int64_t cz, T data)
         }
     } catch (...) {
         // The state of the file is unknown. Clear the cached data and reload from disk.
-        _close_and_clear();
+        _close();
+        _clear();
         read_file_header();
         std::uint32_t disk_location = 0;
         auto sector_it = chunk_locations.find(std::make_pair(cx, cz));
@@ -1008,7 +1008,8 @@ void AnvilRegion::Impl::compact()
             throw std::runtime_error("Failed flushing region file " + path.string());
         }
     } catch (...) {
-        _close_and_clear();
+        _close();
+        _clear();
         throw;
     }
     _close();
