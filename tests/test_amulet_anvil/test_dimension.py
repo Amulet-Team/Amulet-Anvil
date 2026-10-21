@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 
 from amulet.nbt import NamedTag, CompoundTag, StringTag
 
@@ -24,7 +25,7 @@ class AnvilDimensionLayerTestCase(unittest.TestCase):
             directory = os.path.join(world.path, "region")
             layer = AnvilDimensionLayer(directory)
 
-            self.assertEqual(directory, layer.directory)
+            self.assertEqual(Path(directory), layer.directory)
             self.assertFalse(layer.mcc)
 
             # Region iterator
@@ -117,7 +118,7 @@ class AnvilDimensionTestCase(unittest.TestCase):
             dimension = AnvilDimension(world.path, ["region"])
 
             # Properties
-            self.assertEqual(world.path, dimension.directory)
+            self.assertEqual(Path(world.path), dimension.directory)
             self.assertFalse(dimension.mcc)
             self.assertEqual(["region"], dimension.layer_names)
 
@@ -128,7 +129,7 @@ class AnvilDimensionTestCase(unittest.TestCase):
             self.assertIsInstance(region_layer, AnvilDimensionLayer)
             with self.assertRaises(ValueError):
                 dimension.get_layer("other")
-            self.assertEqual(os.path.join(world.path, "region"), region_layer.directory)
+            self.assertEqual(Path(world.path) / "region", region_layer.directory)
 
             # Chunk coords
             self.assertEqual(Chunks, set(dimension.all_chunk_coords()))

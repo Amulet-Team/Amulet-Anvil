@@ -4,7 +4,7 @@
 
 namespace Amulet {
 
-NoValidSector::~NoValidSector() noexcept {}
+NoValidSector::~NoValidSector() noexcept { }
 
 size_t Sector::length() const { return stop - start; }
 
@@ -52,7 +52,7 @@ Sector SectorManager::reserve_space(size_t length)
     if (length == 0) {
         throw std::invalid_argument("Cannot reserve a sector with zero length.");
     }
-    auto it = _free_size.upper_bound(Sector(0, length));
+    auto it = _free_size.lower_bound(Sector(0, length));
     if (it != _free_size.end()) {
         // There exists a section large enough to fit the length
         Sector free_sector = *it;
@@ -84,7 +84,7 @@ void SectorManager::reserve(const Sector& sector)
     if (sector.length() == 0) {
         throw std::invalid_argument("Cannot reserve a sector with zero length.");
     }
-    if (_stop <= sector.start && (_free_size.empty() || _free_size.rbegin()->stop != _stop)) {
+    if (_stop <= sector.start && (_free_start.empty() || _free_start.rbegin()->stop != _stop)) {
         // Sector starts beyond the end and the last sector is reserved.
         if (_resizable) {
             _free_start.emplace(_stop, sector.stop);

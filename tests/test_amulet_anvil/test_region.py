@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from weakref import ref
 from threading import Thread, Condition
 import time
+from pathlib import Path
 
 from amulet.nbt import NamedTag, CompoundTag, StringTag, ListTag
 
@@ -64,7 +65,7 @@ class AnvilRegionTestCase(unittest.TestCase):
             region = AnvilRegion(tmpdir, 10, 20)
             self.assertEqual(10, region.rx)
             self.assertEqual(20, region.rz)
-            self.assertEqual(os.path.join(tmpdir, "r.10.20.mca"), region.path)
+            self.assertEqual(Path(tmpdir) / "r.10.20.mca", region.path)
 
     def test_lock(self) -> None:
         sleep_time = 1
