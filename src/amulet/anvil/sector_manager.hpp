@@ -49,7 +49,7 @@ struct SectorStartSort {
 };
 
 // Sort by length then start.
-struct SectorLenghtStartSort {
+struct SectorLengthStartSort {
     bool operator()(const Sector& a, const Sector& b) const
     {
         if (a.length() == b.length()) {
@@ -72,7 +72,7 @@ private:
 
     // A list of free sectors ordered by (length, start).
     //  This makes it easier to find the first sector large enough
-    std::set<Sector, SectorLenghtStartSort> _free_size;
+    std::set<Sector, SectorLengthStartSort> _free_size;
 
     // A set of reserved sectors
     std::set<Sector, SectorStartSort> _reserved;
