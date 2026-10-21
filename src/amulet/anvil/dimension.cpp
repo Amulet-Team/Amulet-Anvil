@@ -618,8 +618,7 @@ void AnvilDimension::destroy()
     // Destroy all region instances.
     for (auto& it : _layers) {
         auto& layer = *it.second;
-        auto& mutex = layer.get_mutex();
-        astd::lock_guard layer_lock(mutex);
+        astd::lock_guard layer_lock(layer.get_mutex());
         layer.destroy();
     }
     _layers.clear();
