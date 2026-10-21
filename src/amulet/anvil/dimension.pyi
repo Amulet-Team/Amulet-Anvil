@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections.abc
 import os
+import pathlib
 import types
 import typing
 
@@ -146,7 +147,7 @@ class AnvilDimensionLayer:
         """
 
     @property
-    def directory(self) -> str:
+    def directory(self) -> pathlib.Path:
         """
         The directory this instance manages.
         Thread safe.
@@ -174,7 +175,7 @@ class AnvilDimension:
 
     def __init__(
         self,
-        directory: str,
+        directory: os.PathLike | str | bytes,
         layer_names: collections.abc.Iterable[str],
         mcc: bool = False,
     ) -> None: ...
@@ -264,7 +265,7 @@ class AnvilDimension:
         """
 
     @property
-    def directory(self) -> str:
+    def directory(self) -> pathlib.Path:
         """
         The directory this dimension is in.
         Thread safe.

@@ -52,7 +52,7 @@ private:
     // Data shared between the region and closer.
     const std::shared_ptr<Impl> _impl;
 
-    AnvilRegion(const std::filesystem::path& directory, const std::string& file_name, const std::pair<std::int64_t, std::int64_t>& region_coordinate, bool mcc = false);
+    AnvilRegion(const std::filesystem::path& directory, const std::filesystem::path& file_name, const std::pair<std::int64_t, std::int64_t>& region_coordinate, bool mcc = false);
 
 public:
     // Constructors.
@@ -61,7 +61,7 @@ public:
     AnvilRegion(AnvilRegion&&) = delete;
 
     // Construct from the directory path, name of the file and region coordinates.
-    AnvilRegion(const std::filesystem::path& directory, const std::string& file_name, std::int64_t rx, std::int64_t rz, bool mcc = false);
+    AnvilRegion(const std::filesystem::path& directory, const std::filesystem::path& file_name, std::int64_t rx, std::int64_t rz, bool mcc = false);
 
     // Construct from the directory path and region coordinates.
     // File name is computed from region coordinates.
@@ -70,7 +70,7 @@ public:
     // Construct from the path to the region file.
     // Coordinates are computed from the file name.
     // File name must match "r.X.Z.mca".
-    AnvilRegion(std::filesystem::path path, bool mcc = false);
+    AnvilRegion(const std::filesystem::path& path, bool mcc = false);
 
     // Destructor
     virtual ~AnvilRegion();

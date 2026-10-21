@@ -27,7 +27,7 @@ py::module init_anvil_region(py::module m_parent)
 
     AnvilRegion.def(
         py::init(
-            [](std::filesystem::path directory, std::string file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
+            [](std::filesystem::path directory, std::filesystem::path file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(directory, file_name, rx, rz, mcc);
             }),
         py::arg("directory"),
@@ -65,7 +65,7 @@ py::module init_anvil_region(py::module m_parent)
                 "Thread safe."));
     AnvilRegion.def_property_readonly(
         "path",
-        [](Amulet::AnvilRegion& self) -> std::string { return self.path().string(); },
+        &Amulet::AnvilRegion::path,
         py::doc("The path of the region file.\n"
                 "Thread safe."));
     AnvilRegion.def_property_readonly(

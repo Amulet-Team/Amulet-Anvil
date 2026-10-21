@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections.abc
 import os
+import pathlib
 import typing
 
 import amulet.nbt
@@ -28,7 +29,7 @@ class AnvilRegion:
     def __init__(
         self,
         directory: os.PathLike | str | bytes,
-        file_name: str,
+        file_name: os.PathLike | str | bytes,
         rx: typing.SupportsInt | typing.SupportsIndex,
         rz: typing.SupportsInt | typing.SupportsIndex,
         mcc: bool = False,
@@ -186,7 +187,7 @@ class AnvilRegion:
         """
 
     @property
-    def path(self) -> str:
+    def path(self) -> pathlib.Path:
         """
         The path of the region file.
         Thread safe.

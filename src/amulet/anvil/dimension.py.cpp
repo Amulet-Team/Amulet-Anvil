@@ -31,9 +31,7 @@ py::module init_anvil_dimension(py::module m_parent)
                 "Thread safe."));
     AnvilDimensionLayer.def_property_readonly(
         "directory",
-        [](const Amulet::AnvilDimensionLayer& self) {
-            return self.directory().string();
-        },
+        &Amulet::AnvilDimensionLayer::directory,
         py::doc("The directory this instance manages.\n"
                 "Thread safe."));
     AnvilDimensionLayer.def_property_readonly(
@@ -168,7 +166,7 @@ py::module init_anvil_dimension(py::module m_parent)
         "This can consist of multiple layers. Eg the region layer which contains chunk data and the entities layer which contains entities.");
     AnvilDimension.def(
         py::init(
-            [](std::string directory, Amulet::pybind11_extensions::collections::Iterable<std::string> layer_names, bool mcc) {
+            [](std::filesystem::path directory, Amulet::pybind11_extensions::collections::Iterable<std::string> layer_names, bool mcc) {
                 return std::make_shared<Amulet::AnvilDimension>(directory, layer_names, mcc);
             }),
         py::arg("directory"),
@@ -181,9 +179,7 @@ py::module init_anvil_dimension(py::module m_parent)
                 "Thread safe."));
     AnvilDimension.def_property_readonly(
         "directory",
-        [](const Amulet::AnvilDimension& self) {
-            return self.directory().string();
-        },
+        &Amulet::AnvilDimension::directory,
         py::doc("The directory this dimension is in.\n"
                 "Thread safe."));
     AnvilDimension.def_property_readonly(

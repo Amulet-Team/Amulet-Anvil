@@ -1041,13 +1041,20 @@ std::shared_ptr<AnvilRegion::FileCloser> AnvilRegion::Impl::get_file_closer()
 // Constructors.
 AnvilRegion::AnvilRegion(
     const std::filesystem::path& directory,
-    const std::string& file_name,
+    const std::filesystem::path& file_name,
     std::int64_t rx,
     std::int64_t rz,
     bool mcc)
     : _impl(std::make_shared<AnvilRegion::Impl>(
           directory,
-          directory / file_name,
+          [](
+              const std::filesystem::path& directory,
+              const std::filesystem::path& file_name) {
+              if (file_name.empty() || file_name != file_name.filename() || file_name == "." || file_name == "..") {
+                  throw std::invalid_argument("Invalid file name: " + file_name.string());
+              }
+              return directory / file_name;
+          }(directory, file_name),
           rx,
           rz,
           mcc))
@@ -1056,7 +1063,7 @@ AnvilRegion::AnvilRegion(
 
 AnvilRegion::AnvilRegion(
     const std::filesystem::path& directory,
-    const std::string& file_name,
+    const std::filesystem::path& file_name,
     const std::pair<std::int64_t, std::int64_t>& region_coordinate,
     bool mcc)
     : AnvilRegion(
@@ -1080,10 +1087,10 @@ AnvilRegion::AnvilRegion(
 {
 }
 
-AnvilRegion::AnvilRegion(std::filesystem::path path, bool mcc)
+AnvilRegion::AnvilRegion(const std::filesystem::path& path, bool mcc)
     : AnvilRegion(
           path.parent_path(),
-          path.filename().string(),
+          path.filename(),
           parse_region_filename(path.filename().string()),
           mcc)
 {
