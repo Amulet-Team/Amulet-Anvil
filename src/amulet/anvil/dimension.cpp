@@ -138,11 +138,12 @@ void AnvilChunkCoordIterator::operator++(int)
 
 bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterator& rhs)
 {
-    // Only equal in the end state.
     if (lhs._region_it == AnvilRegionCoordIterator()) {
         return rhs._region_it == AnvilRegionCoordIterator();
     } else {
-        return lhs._region_it == rhs._region_it && lhs._coords[lhs._coord_index] == rhs._coords[rhs._coord_index];
+        return (
+            lhs._region_it == rhs._region_it
+            && lhs._coords[lhs._coord_index] == rhs._coords[rhs._coord_index]);
     }
 }
 
