@@ -3,7 +3,6 @@ from __future__ import annotations
 import collections.abc
 import os
 import pathlib
-import types
 import typing
 
 import amulet.anvil.region
@@ -293,4 +292,4 @@ class AnvilDimension:
         Thread safe.
         """
 
-RawChunkType: types.GenericAlias
+RawChunkType: typing.TypeAlias = dict[str, amulet.nbt.NamedTag]
