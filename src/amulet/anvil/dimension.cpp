@@ -449,7 +449,6 @@ void AnvilDimensionLayer::delete_chunk(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimensionLayer::compact()
 {
-    // TODO: Threads
     // TODO: CancelManager
     for (auto it = all_region_coords(); it != AnvilRegionCoordIterator(); it++) {
         auto [rx, rz] = *it;
@@ -598,7 +597,7 @@ void AnvilDimension::compact()
     astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
-        OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
+        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
         layer.compact();
     }
 }
