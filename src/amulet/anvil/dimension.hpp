@@ -179,8 +179,8 @@ private:
     coordsT _coords;
     size_t _coord_index;
 
-    void seek_to_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
-    void seek_to_next_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+    void seek_to_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
+    void seek_to_next_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
 
 public:
     using difference_type = std::ptrdiff_t;
@@ -193,8 +193,8 @@ public:
     AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
     AnvilChunkCoordIterator& operator=(AnvilChunkCoordIterator&&) = default;
     std::pair<std::int64_t, std::int64_t> operator*() const;
-    AnvilChunkCoordIterator& operator++() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
-    void operator++(int) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+    AnvilChunkCoordIterator& operator++() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
+    void operator++(int) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
     friend AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
 };
 
