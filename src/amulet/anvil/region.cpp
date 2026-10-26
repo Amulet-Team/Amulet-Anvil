@@ -853,7 +853,6 @@ void AnvilRegion::Impl::set_value(std::int64_t cx, std::int64_t cz, const NamedT
             + " in region file "
             + path.string()
             + " because it was too large.");
-        return;
     }
 
     CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
