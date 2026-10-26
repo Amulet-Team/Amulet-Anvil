@@ -67,19 +67,11 @@ bool operator==(const AnvilRegionCoordIterator& lhs, const AnvilRegionCoordItera
 
 void AnvilChunkCoordIterator::seek_to_valid()
 {
-    std::shared_ptr<AnvilDimensionLayer> layer;
     for (; _region_it != AnvilRegionCoordIterator(); _region_it++) {
-        if (!layer) {
-            layer = _layer.lock();
-            if (!layer) {
-                throw std::runtime_error("layer attached to AnvilChunkCoordIterator has been destroyed.");
-            }
-        }
-        OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer->get_mutex());
         const auto& [rx, rz] = *_region_it;
         std::shared_ptr<AnvilRegion> region;
         try {
-            region = layer->get_region(rx, rz);
+            region = _layer->get_region(rx, rz);
         } catch (const RegionDoesNotExist&) {
             continue;
         }
@@ -109,12 +101,8 @@ void AnvilChunkCoordIterator::seek_to_next_valid()
 AnvilChunkCoordIterator::AnvilChunkCoordIterator() { }
 
 AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<AnvilDimensionLayer> layer)
-    : _layer([&]() -> std::weak_ptr<AnvilDimensionLayer> { 
-        if (!layer) {
-            throw std::invalid_argument("layer is nullptr");
-        }
-        return layer; }())
-    , _region_it(layer->all_region_coords())
+    : _layer(layer ? std::move(layer) : throw std::invalid_argument("layer must not be a nullptr"))
+    , _region_it(_layer->all_region_coords())
     , _coord_index(0)
 {
     seek_to_valid();

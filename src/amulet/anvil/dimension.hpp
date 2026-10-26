@@ -27,71 +27,8 @@
 
 namespace Amulet {
 
-// An input iterator over region coordinates in a directory.
-class AMULET_ANVIL_EXPORT AnvilRegionCoordIterator {
-    // Not thread safe.
-private:
-    std::filesystem::directory_iterator it;
-    std::pair<std::int64_t, std::int64_t> coord;
-
-    void seek_to_valid();
-    void seek_to_next_valid();
-
-public:
-    using difference_type = std::ptrdiff_t;
-    using value_type = std::pair<std::int64_t, std::int64_t>;
-
-    AnvilRegionCoordIterator();
-    AnvilRegionCoordIterator(const std::filesystem::path&);
-    AnvilRegionCoordIterator(const AnvilRegionCoordIterator&) = delete;
-    AnvilRegionCoordIterator(AnvilRegionCoordIterator&&) = default;
-    AnvilRegionCoordIterator& operator=(const AnvilRegionCoordIterator&) = delete;
-    AnvilRegionCoordIterator& operator=(AnvilRegionCoordIterator&&) = default;
-    const std::pair<std::int64_t, std::int64_t>& operator*() const;
-    AnvilRegionCoordIterator& operator++();
-    void operator++(int);
-    friend AMULET_ANVIL_EXPORT bool operator==(const AnvilRegionCoordIterator&, const AnvilRegionCoordIterator&);
-};
-
-AMULET_ANVIL_EXPORT bool operator==(const AnvilRegionCoordIterator&, const AnvilRegionCoordIterator&);
-
-static_assert(std::input_iterator<AnvilRegionCoordIterator>);
-
-// An input iterator over chunk coordinates in a dimension layer.
-// Layer's Read:SharedReadWrite lock required.
-// Layer's Read:SharedReadOnly lock optional.
-class AMULET_ANVIL_EXPORT AnvilChunkCoordIterator {
-    // Not thread safe.
-private:
-    std::weak_ptr<class AnvilDimensionLayer> _layer;
-    AnvilRegionCoordIterator _region_it;
-    using coordsT = std::vector<std::pair<std::int64_t, std::int64_t>>;
-    coordsT _coords;
-    size_t _coord_index;
-
-    void seek_to_valid();
-    void seek_to_next_valid();
-
-public:
-    using difference_type = std::ptrdiff_t;
-    using value_type = std::pair<std::int64_t, std::int64_t>;
-
-    AnvilChunkCoordIterator();
-    AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer>);
-    AnvilChunkCoordIterator(const AnvilChunkCoordIterator&) = delete;
-    AnvilChunkCoordIterator(AnvilChunkCoordIterator&&) = default;
-    AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
-    AnvilChunkCoordIterator& operator=(AnvilChunkCoordIterator&&) = default;
-    std::pair<std::int64_t, std::int64_t> operator*() const;
-    AnvilChunkCoordIterator& operator++();
-    void operator++(int);
-    friend AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
-};
-
-AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
-
-static_assert(std::input_iterator<AnvilChunkCoordIterator>);
-
+class AnvilRegionCoordIterator;
+class AnvilChunkCoordIterator;
 class AnvilRegionStorage;
 
 // In the Anvil format chunk data is split into layers.
@@ -185,8 +122,8 @@ public:
     void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Defragment the region files and remove unused region files.
-    // External Read:SharedReadWrite lock required.
-    void compact() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
+    // External ReadWrite:SharedReadWrite lock required.
+    void compact() ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Destroy the instance.
     // Calls made after this will fail.
@@ -199,6 +136,71 @@ public:
     // External Read:SharedReadWrite lock required.
     bool is_destroyed() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 };
+
+// An input iterator over region coordinates in a directory.
+// Not thread safe.
+class AMULET_ANVIL_EXPORT AnvilRegionCoordIterator {
+private:
+    std::filesystem::directory_iterator it;
+    std::pair<std::int64_t, std::int64_t> coord;
+
+    void seek_to_valid();
+    void seek_to_next_valid();
+
+public:
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::pair<std::int64_t, std::int64_t>;
+
+    AnvilRegionCoordIterator();
+    AnvilRegionCoordIterator(const std::filesystem::path&);
+    AnvilRegionCoordIterator(const AnvilRegionCoordIterator&) = delete;
+    AnvilRegionCoordIterator(AnvilRegionCoordIterator&&) = default;
+    AnvilRegionCoordIterator& operator=(const AnvilRegionCoordIterator&) = delete;
+    AnvilRegionCoordIterator& operator=(AnvilRegionCoordIterator&&) = default;
+    const std::pair<std::int64_t, std::int64_t>& operator*() const;
+    AnvilRegionCoordIterator& operator++();
+    void operator++(int);
+    friend AMULET_ANVIL_EXPORT bool operator==(const AnvilRegionCoordIterator&, const AnvilRegionCoordIterator&);
+};
+
+AMULET_ANVIL_EXPORT bool operator==(const AnvilRegionCoordIterator&, const AnvilRegionCoordIterator&);
+
+static_assert(std::input_iterator<AnvilRegionCoordIterator>);
+
+// An input iterator over chunk coordinates in a dimension layer.
+// Not thread safe.
+// Layer's Read:SharedReadWrite lock required.
+// Layer's Read:SharedReadOnly lock optional.
+class AMULET_ANVIL_EXPORT AnvilChunkCoordIterator {
+private:
+    std::shared_ptr<class AnvilDimensionLayer> _layer;
+    AnvilRegionCoordIterator _region_it;
+    using coordsT = std::vector<std::pair<std::int64_t, std::int64_t>>;
+    coordsT _coords;
+    size_t _coord_index;
+
+    void seek_to_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+    void seek_to_next_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+
+public:
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::pair<std::int64_t, std::int64_t>;
+
+    AnvilChunkCoordIterator();
+    AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, layer->_public_mutex);
+    AnvilChunkCoordIterator(const AnvilChunkCoordIterator&) = delete;
+    AnvilChunkCoordIterator(AnvilChunkCoordIterator&&) = default;
+    AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
+    AnvilChunkCoordIterator& operator=(AnvilChunkCoordIterator&&) = default;
+    std::pair<std::int64_t, std::int64_t> operator*() const;
+    AnvilChunkCoordIterator& operator++() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+    void operator++(int) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->_public_mutex);
+    friend AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
+};
+
+AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
+
+static_assert(std::input_iterator<AnvilChunkCoordIterator>);
 
 template <typename Range, typename T>
 concept TypedInputRange = std::ranges::input_range<Range> && std::convertible_to<std::ranges::range_value_t<Range>, T>;
@@ -267,39 +269,39 @@ public:
     // Get the names of all layers in this dimension.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    std::vector<std::string> layer_names() ASTD_EXCLUDES_ALL(_mutex);
+    std::vector<std::string> layer_names() ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Check if this dimension has the requested layer.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_layer(const std::string& layer_name) ASTD_EXCLUDES_ALL(_mutex);
+    bool has_layer(const std::string& layer_name) ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get the AnvilDimensionLayer for a specific layer. The returned value must not be stored long-term.
     // If create=true the layer will be created if it doesn't exist.
     // External Read:SharedReadWrite lock required if only calling Read methods on AnvilDimensionLayer.
     // External ReadWrite:SharedReadWrite lock required if create=true or calling ReadWrite methods on AnvilDimensionLayer.
-    std::shared_ptr<AnvilDimensionLayer> get_layer(const std::string& layer_name, bool create = false) ASTD_EXCLUDES_ALL(_mutex);
+    std::shared_ptr<AnvilDimensionLayer> get_layer(const std::string& layer_name, bool create = false) ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get an iterator for all the chunks that exist in this dimension.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    AnvilChunkCoordIterator all_chunk_coords() const ASTD_EXCLUDES_ALL(_mutex);
+    AnvilChunkCoordIterator all_chunk_coords() const ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Check if a chunk exists.
     // External Read:SharedReadWrite lock required.
     // External Read:SharedReadOnly lock optional.
-    bool has_chunk(std::int64_t cx, std::int64_t cz) const ASTD_EXCLUDES_ALL(_mutex);
+    bool has_chunk(std::int64_t cx, std::int64_t cz) const ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Get the data for a chunk
     // External Read:SharedReadWrite lock required.
-    JavaRawChunk get_chunk_data(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES_ALL(_mutex);
+    JavaRawChunk get_chunk_data(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 
     // Set the data for a chunk.
     // data_layers can be any object supporting std::ranges::input_range of [std::string, Amulet::NBT::NamedTag || std::optional<Amulet::NBT::NamedTag>]
     // If the second value is a nullopt optional, the value will be deleted.
     // External ReadWrite:SharedReadWrite lock required.
     template <typename dataT>
-    void set_chunk_data(std::int64_t cx, std::int64_t cz, const dataT& data_layers) ASTD_EXCLUDES_ALL(_mutex)
+    void set_chunk_data(std::int64_t cx, std::int64_t cz, const dataT& data_layers) ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex)
     {
         using ItT = std::ranges::range_value_t<dataT>;
         using NameT = std::remove_cv_t<std::tuple_element_t<0, ItT>>;
@@ -386,22 +388,22 @@ public:
 
     // Delete all data for the given chunk.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES_ALL(_mutex);
+    void delete_chunk(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Defragment the region files and remove unused region files.
     // External ReadWrite:SharedReadOnly lock required.
-    void compact() ASTD_EXCLUDES_ALL(_mutex);
+    void compact() ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Destroy the instance.
     // Calls made after this will fail.
     // This may only be called by the owner of the instance.
     // External ReadWrite:Unique lock required.
-    void destroy() ASTD_EXCLUDES_ALL(_mutex);
+    void destroy() ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(ReadWrite, Unique, _public_mutex);
 
     // Has the instance been destroyed.
     // If this is false, other calls will fail.
     // External Read:SharedReadWrite lock required.
-    bool is_destroyed() ASTD_EXCLUDES_ALL(_mutex);
+    bool is_destroyed() ASTD_EXCLUDES_ALL(_mutex) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _public_mutex);
 };
 
 } // namespace Amulet
