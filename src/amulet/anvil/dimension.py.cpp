@@ -95,12 +95,12 @@ py::module init_anvil_dimension(py::module m_parent)
                 "External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion."));
     AnvilDimensionLayer.def(
         "all_chunk_coords",
-        [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) {
+        [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, self->get_mutex()) {
             return py::make_iterator(
-                [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) {
+                [](const std::shared_ptr<Amulet::AnvilDimensionLayer>& self) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, self->get_mutex()) {
                     py::gil_scoped_release nogil;
-                    return Amulet::AnvilChunkCoordIterator(std::move(self));
-                }(std::move(self)),
+                    return Amulet::AnvilChunkCoordIterator(self);
+                }(self),
                 Amulet::AnvilChunkCoordIterator(),
                 py::call_guard<py::gil_scoped_release>());
         },
@@ -194,7 +194,7 @@ py::module init_anvil_dimension(py::module m_parent)
                 "Thread safe."));
     AnvilDimension.def_property_readonly(
         "layer_names",
-        [](Amulet::AnvilDimension& self) {
+        [](Amulet::AnvilDimension& self) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, self.get_mutex()) {
             py::gil_scoped_release nogil;
             return self.layer_names();
         },
@@ -252,7 +252,11 @@ py::module init_anvil_dimension(py::module m_parent)
                 "External Read:SharedReadWrite lock required."));
     AnvilDimension.def(
         "set_chunk_data",
-        [](Amulet::AnvilDimension& self, std::int64_t cx, std::int64_t cz, Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, Amulet::NBT::NamedTag>> py_data_layers) {
+        [](
+            Amulet::AnvilDimension& self,
+            std::int64_t cx,
+            std::int64_t cz,
+            Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, Amulet::NBT::NamedTag>> py_data_layers) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, self.get_mutex()) {
             std::vector<std::pair<std::string, Amulet::NBT::NamedTag>> data_layers;
             for (const auto& pair : py_data_layers) {
                 data_layers.push_back(pair);
