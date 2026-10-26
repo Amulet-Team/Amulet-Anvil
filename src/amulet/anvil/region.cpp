@@ -7,11 +7,12 @@
 #include <ctime>
 #include <fstream>
 #include <list>
-#include <regex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <lz4.h>
@@ -103,14 +104,52 @@ public:
 
 static FileCloserCache region_file_cache(64);
 
-std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& filename)
+std::pair<std::int64_t, std::int64_t> parse_region_filename(std::string_view filename)
 {
-    static const std::regex region_regex(R"(^r\.(\-?\d{1,10})\.(\-?\d{1,10})\.mca$)");
-    std::smatch match;
-    if (!std::regex_search(filename, match, region_regex)) {
+    constexpr std::string_view prefix = "r.";
+    constexpr std::string_view suffix = ".mca";
+
+    // Validate size, prefix and suffix.
+    if (
+        filename.size() < prefix.size() + suffix.size()
+        || !filename.starts_with(prefix)
+        || !filename.ends_with(suffix)) {
         throw std::invalid_argument("Region filename is invalid.");
     }
-    return std::make_pair(std::stoll(match[1]), std::stoll(match[2]));
+
+    auto parse_int = [](std::string_view s) -> std::int64_t {
+        bool negative = false;
+        if (!s.empty() && s[0] == '-') {
+            negative = true;
+            s.remove_prefix(1);
+        }
+        if (s.empty() || s.size() > 10) {
+            throw std::invalid_argument("Region filename is invalid.");
+        }
+        if (s[0] == '0' && (s.size() > 1 || negative)) {
+            // Leading numbers cannot be 0. 0 cannot be negative.
+            throw std::invalid_argument("Region filename is invalid.");
+        }
+        std::int64_t value = 0;
+        for (const char c : s) {
+            if (c < '0' || '9' < c) {
+                throw std::invalid_argument("Region filename is invalid.");
+            }
+            value = value * 10 + (c - '0');
+        }
+        return negative ? -value : value;
+    };
+
+    // Find the middle dot index and parse numbers.
+    for (size_t i = prefix.size(); i < filename.size() - suffix.size(); i++) {
+        if (filename[i] == '.') {
+            return std::make_pair(
+                parse_int(filename.substr(prefix.size(), i - prefix.size())),
+                parse_int(filename.substr(i + 1, filename.size() - suffix.size() - i - 1)));
+        }
+    }
+    // If the middle dot was not found, the name is invalid.
+    throw std::invalid_argument("Region filename is invalid.");
 }
 
 class AnvilRegion::Impl : public std::enable_shared_from_this<AnvilRegion::Impl> {

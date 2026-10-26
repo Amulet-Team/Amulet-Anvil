@@ -7,6 +7,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,7 +23,7 @@
 
 namespace Amulet {
 
-AMULET_ANVIL_EXPORT std::pair<std::int64_t, std::int64_t> parse_region_filename(const std::string& filename);
+AMULET_ANVIL_EXPORT std::pair<std::int64_t, std::int64_t> parse_region_filename(std::string_view filename);
 
 // A class to read and write Minecraft Java Edition Region files.
 // Only one instance should exist per region file at any given time otherwise bad things may happen.
