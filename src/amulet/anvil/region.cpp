@@ -24,8 +24,6 @@
 
 #include <amulet/nbt/nbt_encoding/binary.hpp>
 
-#include <amulet/anvil/dll.hpp>
-
 #include "region.hpp"
 
 using namespace Amulet::NBT;
@@ -211,14 +209,14 @@ public:
     // External Read:SharedReadWrite lock required.
     Amulet::NBT::NamedTag get_value(std::int64_t cx, std::int64_t cz) ASTD_EXCLUDES_ALL(mutex);
 
-    // AMULET_ANVIL_EXPORT std::vector<std::optional<Amulet::NBT::NamedTag>> get_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
+    // std::vector<std::optional<Amulet::NBT::NamedTag>> get_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords);
 
     // Set the value for this coordinate.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
     void set_value(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag) ASTD_EXCLUDES_ALL(mutex);
 
-    // AMULET_ANVIL_EXPORT void set_batch(std::vector<std::tuple<std::int64_t, std::int64_t, Amulet::NBT::NamedTag>>& batch);
+    // void set_batch(std::vector<std::tuple<std::int64_t, std::int64_t, Amulet::NBT::NamedTag>>& batch);
 
     // Delete the chunk data.
     // Coordinates are in world space.

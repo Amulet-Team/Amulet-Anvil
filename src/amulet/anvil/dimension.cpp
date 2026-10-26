@@ -4,6 +4,10 @@
 #include <mutex>
 #include <vector>
 
+#include <amulet/utils/threading/mutex.hpp>
+#include <amulet/utils/threading/shared_mutex.hpp>
+#include <amulet/utils/threading/thread_safety.hpp>
+
 #include "dimension.hpp"
 #include "region.hpp"
 
