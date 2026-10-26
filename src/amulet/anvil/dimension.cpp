@@ -102,10 +102,15 @@ void AnvilChunkCoordIterator::seek_to_next_valid()
     }
 }
 
+Amulet::OrderedMutex& AnvilChunkCoordIterator::get_mutex()
+{
+    return _layer->get_mutex();
+}
+
 AnvilChunkCoordIterator::AnvilChunkCoordIterator() { }
 
-AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<AnvilDimensionLayer> layer)
-    : _layer(layer ? std::move(layer) : throw std::invalid_argument("layer must not be a nullptr"))
+AnvilChunkCoordIterator::AnvilChunkCoordIterator(const std::shared_ptr<AnvilDimensionLayer>& layer)
+    : _layer(layer ? layer : throw std::invalid_argument("layer must not be a nullptr"))
     , _region_it(_layer->all_region_coords())
     , _coord_index(0)
 {
@@ -552,6 +557,7 @@ std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string
 
 AnvilChunkCoordIterator AnvilDimension::all_chunk_coords() const
 {
+    OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(_default_layer->get_mutex());
     return AnvilChunkCoordIterator(_default_layer);
 }
 

@@ -186,15 +186,18 @@ public:
     using difference_type = std::ptrdiff_t;
     using value_type = std::pair<std::int64_t, std::int64_t>;
 
+    // Get the layer's mutex for this iterator.
+    Amulet::OrderedMutex& get_mutex() ASTD_RETURN_CAPABILITY(_layer->get_mutex());
+
     AnvilChunkCoordIterator();
-    AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, layer->get_mutex());
+    AnvilChunkCoordIterator(const std::shared_ptr<class AnvilDimensionLayer>& layer) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, layer->get_mutex());
     AnvilChunkCoordIterator(const AnvilChunkCoordIterator&) = delete;
     AnvilChunkCoordIterator(AnvilChunkCoordIterator&&) = default;
     AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
     AnvilChunkCoordIterator& operator=(AnvilChunkCoordIterator&&) = default;
     std::pair<std::int64_t, std::int64_t> operator*() const;
-    AnvilChunkCoordIterator& operator++() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
-    void operator++(int) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
+    AnvilChunkCoordIterator& operator++() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, get_mutex());
+    void operator++(int) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, get_mutex());
     friend AMULET_ANVIL_EXPORT bool operator==(const AnvilChunkCoordIterator&, const AnvilChunkCoordIterator&);
 };
 
