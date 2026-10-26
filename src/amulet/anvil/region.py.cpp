@@ -20,7 +20,7 @@ py::module init_anvil_region(py::module m_parent)
             "Upstream locks from the level must also be adhered to.");
 
     py::classh<Amulet::AnvilRegion::FileCloser>
-        FileCloser(AnvilRegion, "FileCloser",
+        FileCloser(AnvilRegion, "FileCloser", py::release_gil_before_calling_cpp_dtor(),
             "A class to manage closing the region file.\n"
             "When the instance is deleted the region file will be closed.\n"
             "The region file can be manually closed before this is deleted.");
