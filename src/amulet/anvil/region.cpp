@@ -364,8 +364,8 @@ void AnvilRegion::Impl::read_file_header()
         for (auto& v : location_table) {
             big_endian_swap(v);
         }
-        for (size_t cx = 0; cx < 32; cx++) {
-            for (size_t cz = 0; cz < 32; cz++) {
+        for (std::int64_t cx = 0; cx < 32; cx++) {
+            for (std::int64_t cz = 0; cz < 32; cz++) {
                 const auto& sector_data = location_table[cx + cz * 32];
                 if (sector_data) {
                     size_t sector_offset = (sector_data >> 8) * SectorSize;
