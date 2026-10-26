@@ -187,7 +187,7 @@ public:
     using value_type = std::pair<std::int64_t, std::int64_t>;
 
     AnvilChunkCoordIterator();
-    AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, layer->_public_mutex);
+    AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, layer->get_mutex());
     AnvilChunkCoordIterator(const AnvilChunkCoordIterator&) = delete;
     AnvilChunkCoordIterator(AnvilChunkCoordIterator&&) = default;
     AnvilChunkCoordIterator& operator=(const AnvilChunkCoordIterator&) = delete;
