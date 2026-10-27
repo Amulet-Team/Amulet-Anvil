@@ -96,11 +96,13 @@ py::module init_anvil_dimension(py::module m_parent)
     AnvilDimensionLayer.def(
         "all_chunk_coords",
         [](std::shared_ptr<Amulet::AnvilDimensionLayer> self) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, self->get_mutex()) {
+            Amulet::AnvilChunkCoordIterator it;
+            {
+                py::gil_scoped_release nogil;
+                it = Amulet::AnvilChunkCoordIterator(self);
+            }
             return py::make_iterator(
-                [](const std::shared_ptr<Amulet::AnvilDimensionLayer>& self) ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, self->get_mutex()) {
-                    py::gil_scoped_release nogil;
-                    return Amulet::AnvilChunkCoordIterator(self);
-                }(self),
+                std::move(it),
                 Amulet::AnvilChunkCoordIterator(),
                 py::call_guard<py::gil_scoped_release>());
         },
