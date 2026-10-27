@@ -599,7 +599,9 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
         throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     create_open_region_file_if_closed();
-    if (!regionf.seekg(it->second.start)) {
+
+    const auto& sector = it->second;
+    if (!regionf.seekg(sector.start)) {
         throw std::runtime_error("Failed seeking.");
     }
 
@@ -610,7 +612,7 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
     }
     big_endian_swap(buffer_size);
 
-    if (buffer_size < 1 || buffer_size > MaxRegionSize) {
+    if (buffer_size < 1 || buffer_size > MaxRegionSize || (buffer_size + 4) > sector.length()) {
         throw std::runtime_error("Invalid buffer size " + std::to_string(buffer_size) + ".");
     }
 
