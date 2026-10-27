@@ -89,6 +89,7 @@ public:
         _free_size.emplace(start, stop);
     };
 
+    // All free sectors ordered by start address
     const std::set<Sector, SectorStartSort>& sectors() const { return _free_start; }
 
     Sector reserve_space(size_t length);

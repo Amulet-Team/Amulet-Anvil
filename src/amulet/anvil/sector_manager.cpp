@@ -69,15 +69,24 @@ Sector SectorManager::reserve_space(size_t length)
         _reserved.emplace(sector);
         return sector;
     } else if (_resizable) {
+        size_t start = _stop;
+        if (!_free_start.empty() && _free_start.rbegin()->stop == _stop) {
+            // The last sector is unreserved but not large enough to store the data.
+            // Extend the sector.
+            const auto old_sector = *_free_start.rbegin();
+            _free_start.erase(old_sector);
+            _free_size.erase(old_sector);
+            start = old_sector.start;
+        }
         // Resize to fit
-        Sector sector(_stop, _stop + length);
+        Sector sector(start, start + length);
         _stop = sector.stop;
         _reserved.emplace(sector);
         return sector;
     } else {
         throw NoValidSector("There is not enough contiguous space to allocate the length.");
     }
-};
+}
 
 void SectorManager::reserve(const Sector& sector)
 {
@@ -131,7 +140,7 @@ void SectorManager::reserve(const Sector& sector)
         _free_size.emplace(sec);
     }
     _reserved.emplace(sector);
-};
+}
 
 void SectorManager::free(const Sector& sector)
 {
@@ -162,6 +171,6 @@ void SectorManager::free(const Sector& sector)
 
     _free_start.emplace_hint(free_it, new_sector);
     _free_size.emplace(new_sector);
-};
+}
 
 } // namespace Amulet
