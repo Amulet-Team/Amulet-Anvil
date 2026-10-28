@@ -209,6 +209,7 @@ public:
     void validate_coord(std::int64_t cx, std::int64_t cz) const;
 
     void set_header(std::int64_t cx, std::int64_t cz, std::uint32_t location) ASTD_REQUIRES_UNIQUE(mutex);
+    void set_header_relative(std::int64_t cx, std::int64_t cz, std::uint32_t location) ASTD_REQUIRES_UNIQUE(mutex);
 
     // Set chunk data.
     // Caller must ensure the file is open.
@@ -654,7 +655,15 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 
 void AnvilRegion::Impl::set_header(std::int64_t cx, std::int64_t cz, std::uint32_t location)
 {
-    size_t header_offset = 4 * (cx - rx * 32 + (cz - rz * 32) * 32);
+    set_header_relative(cx - rx * 32, cz - rz * 32, location);
+}
+
+void AnvilRegion::Impl::set_header_relative(std::int64_t cx, std::int64_t cz, std::uint32_t location)
+{
+    if (cx < 0 || 32 <= cx || cz < 0 || 32 <= cz) {
+        throw std::invalid_argument("Coord is not in this region file.");
+    }
+    size_t header_offset = 4 * (cx + cz * 32);
 
     // Write timestamp
     if (!regionf.seekp(SectorSize + header_offset)) {
