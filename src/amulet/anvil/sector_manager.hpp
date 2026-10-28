@@ -65,7 +65,6 @@ struct SectorLengthStartSort {
 class SectorManager {
 private:
     size_t _stop;
-    bool _resizable;
 
     // A list of free sectors ordered by start location
     std::set<Sector, SectorStartSort> _free_start;
@@ -78,9 +77,8 @@ private:
     std::set<Sector, SectorStartSort> _reserved;
 
 public:
-    SectorManager(size_t start = 0, size_t stop = 0, bool resizable = true)
+    SectorManager(size_t start = 0, size_t stop = 0)
         : _stop(stop)
-        , _resizable(resizable)
     {
         if (stop < start) {
             throw std::invalid_argument("stop must be at least start");

@@ -68,7 +68,7 @@ Sector SectorManager::reserve_space(size_t length)
         }
         _reserved.emplace(sector);
         return sector;
-    } else if (_resizable) {
+    } else {
         size_t start = _stop;
         if (!_free_start.empty() && _free_start.rbegin()->stop == _stop) {
             // The last sector is unreserved but not large enough to store the data.
@@ -83,8 +83,6 @@ Sector SectorManager::reserve_space(size_t length)
         _stop = sector.stop;
         _reserved.emplace(sector);
         return sector;
-    } else {
-        throw NoValidSector("There is not enough contiguous space to allocate the length.");
     }
 }
 
@@ -95,13 +93,9 @@ void SectorManager::reserve(const Sector& sector)
     }
     if (_stop <= sector.start && (_free_start.empty() || _free_start.rbegin()->stop != _stop)) {
         // Sector starts beyond the end and the last sector is reserved.
-        if (_resizable) {
-            _free_start.emplace(_stop, sector.stop);
-            _free_size.emplace(_stop, sector.stop);
-            _stop = sector.stop;
-        } else {
-            throw NoValidSector("The sector starts outside of the region.");
-        }
+        _free_start.emplace(_stop, sector.stop);
+        _free_size.emplace(_stop, sector.stop);
+        _stop = sector.stop;
     }
 
     // Find the first sector that starts before or at the sector start.
@@ -122,15 +116,11 @@ void SectorManager::reserve(const Sector& sector)
         it = _free_start.erase(it);
         _free_size.erase(free_sector);
     } else if (free_sector.stop == _stop) {
-        if (_resizable) {
-            // The sector is the last one and the memory region is resizable
-            it = _free_start.erase(it);
-            _free_size.erase(free_sector);
-            free_sector = Sector(free_sector.start, sector.stop);
-            _stop = sector.stop;
-        } else {
-            throw NoValidSector("The sector is outside the defined region and the region is not resizable.");
-        }
+        // The sector is the last one and the memory region is resizable
+        it = _free_start.erase(it);
+        _free_size.erase(free_sector);
+        free_sector = Sector(free_sector.start, sector.stop);
+        _stop = sector.stop;
     } else {
         throw NoValidSector("The requested sector is not free to be reserved.");
     }
