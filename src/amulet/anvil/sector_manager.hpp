@@ -92,8 +92,15 @@ public:
     // All free sectors ordered by start address
     const std::set<Sector, SectorStartSort>& sectors() const { return _free_start; }
 
+    // Reserve a sector of size length that does not intersect any reserved sectors.
     Sector reserve_space(size_t length);
+
+    // Reserve the requested sector.
+    // If the sector intersects a reserved sector, the intersection reserved twice.
     void reserve(const Sector& sector);
+
+    // Free the specified sector.
+    // The sector must have been previously reserved.
     void free(const Sector& sector);
 };
 
