@@ -265,7 +265,7 @@ public:
     // Delete multiple chunk's data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_EXCLUDES_ALL(mutex);
+    void delete_batch(const std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_EXCLUDES_ALL(mutex);
 
     // Compact the region file.
     // Defragments the file and deletes unused space.
@@ -928,7 +928,7 @@ void AnvilRegion::Impl::delete_value(std::int64_t cx, std::int64_t cz)
     set_data<std::nullopt_t>(cx, cz, std::nullopt);
 }
 
-void AnvilRegion::Impl::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
+void AnvilRegion::Impl::delete_batch(const std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
 {
     CloserAndEvicted closer_and_evicted; // Declared before lock so it is destroyed after.
     astd::lock_guard lock(mutex);
@@ -1202,7 +1202,7 @@ void AnvilRegion::delete_value(std::int64_t cx, std::int64_t cz)
     _impl->delete_value(cx, cz);
 }
 
-void AnvilRegion::delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
+void AnvilRegion::delete_batch(const std::vector<std::pair<std::int64_t, std::int64_t>>& coords)
 {
     _impl->delete_batch(coords);
 }

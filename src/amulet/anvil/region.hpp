@@ -136,7 +136,7 @@ public:
     // Delete multiple chunk's data.
     // Coordinates are in world space.
     // External ReadWrite:SharedReadWrite lock required.
-    void delete_batch(std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
+    void delete_batch(const std::vector<std::pair<std::int64_t, std::int64_t>>& coords) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, _public_mutex);
 
     // Compact the region file.
     // Defragments the file and deletes unused space.
