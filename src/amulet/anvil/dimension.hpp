@@ -50,7 +50,7 @@ public:
     AnvilDimensionLayer(std::filesystem::path directory, bool mcc = false);
 
     // Destructor
-    ~AnvilDimensionLayer();
+    ~AnvilDimensionLayer() noexcept;
 
     static bool is_valid_layer_name(const std::string& name);
 
@@ -255,7 +255,7 @@ public:
     }
 
     // Destructor
-    ~AnvilDimension();
+    ~AnvilDimension() noexcept;
 
     // External mutex.
     // Thread safe.
