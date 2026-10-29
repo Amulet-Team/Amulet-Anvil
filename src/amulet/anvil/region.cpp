@@ -386,7 +386,7 @@ void AnvilRegion::Impl::read_file_header()
 
     // Load the region data
     std::map<std::pair<std::int64_t, std::int64_t>, Sector> local_chunk_locations;
-    SectorManager local_sector_manager(0, SectorSize * 2);
+    SectorManager local_sector_manager(SectorSize * 2);
     local_sector_manager.reserve(Sector(0, SectorSize * 2));
 
     if (std::filesystem::is_regular_file(path)) {
@@ -418,12 +418,7 @@ void AnvilRegion::Impl::read_file_header()
                         Amulet::error("Chunk header is invalid for cx=" + std::to_string(rx * 32 + cx) + " cz=" + std::to_string(rz * 32 + cz));
                         continue;
                     }
-                    try {
-                        local_sector_manager.reserve(sector);
-                    } catch (const NoValidSector&) {
-                        Amulet::error("Chunk header is invalid for cx=" + std::to_string(rx * 32 + cx) + " cz=" + std::to_string(rz * 32 + cz));
-                        continue;
-                    }
+                    local_sector_manager.reserve(sector);
                     local_chunk_locations.emplace(std::make_pair(cx + rx * 32, cz + rz * 32), sector);
                 }
             }
