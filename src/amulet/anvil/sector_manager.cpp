@@ -290,10 +290,10 @@ void SectorManager::free(const Sector& sector)
         if (free_it != _free_start.begin()) {
             auto prev = std::prev(free_it);
             if (prev->stop == new_sector.start) {
-                // The previous free sector starts at the beginning of the freed sector. Merge them.
-                new_sector.start = free_it->start;
-                _free_size.erase(*free_it);
-                _free_start.erase(free_it);
+                // The previous free sector ends at the start of the freed sector. Merge them.
+                new_sector.start = prev->start;
+                _free_size.erase(*prev);
+                _free_start.erase(prev);
             }
         }
 
