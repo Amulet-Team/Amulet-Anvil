@@ -22,7 +22,7 @@ bool Sector::contains(const Sector& other) const
 // Do the two sectors neighbour but not intersect.
 bool Sector::neighbours(const Sector& other) const
 {
-    return other.stop == start or stop == other.start;
+    return other.stop == start || stop == other.start;
 }
 
 // Split this sector around another sector.
