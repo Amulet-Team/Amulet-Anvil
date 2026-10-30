@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -25,7 +27,10 @@ public:
     {
     }
 
-    size_t length() const;
+    size_t length() const
+    {
+        return stop - start;
+    }
 
     // Do the two sectors intersect each other.
     bool intersects(const Sector& other) const;
@@ -40,6 +45,11 @@ public:
     std::vector<Sector> split(const Sector& other) const;
 };
 
+inline bool operator==(const Sector& lhs, const Sector& rhs)
+{
+    return lhs.start == rhs.start && lhs.stop == rhs.stop;
+}
+
 // Sort by start position
 struct SectorStartSort {
     bool operator()(const Sector& a, const Sector& b) const
@@ -49,7 +59,7 @@ struct SectorStartSort {
 };
 
 // Sort by length then start.
-struct SectorLenghtStartSort {
+struct SectorLengthStartSort {
     bool operator()(const Sector& a, const Sector& b) const
     {
         if (a.length() == b.length()) {
@@ -60,39 +70,84 @@ struct SectorLenghtStartSort {
     }
 };
 
+// Sort by start then length.
+struct SectorStartLengthSort {
+    bool operator()(const Sector& a, const Sector& b) const
+    {
+        if (a.start == b.start) {
+            return a.length() < b.length();
+        } else {
+            return a.start < b.start;
+        }
+    }
+};
+
+struct ReservedSector;
+using SectorManagerReservedMap = std::map<Sector, ReservedSector, SectorStartLengthSort>;
+using SectorManagerReservedMapIt = SectorManagerReservedMap::iterator;
+
+struct SectorMapItStartLengthSort {
+    bool operator()(const SectorManagerReservedMapIt& a, const SectorManagerReservedMapIt& b) const;
+};
+
+struct ReservedSector {
+    // The number of times this sector is reserved.
+    size_t count = 1;
+
+    // Other sectors that intersect this sector.
+    std::set<SectorManagerReservedMap::iterator, SectorMapItStartLengthSort> intersecting_sectors;
+};
+
+inline bool SectorMapItStartLengthSort::operator()(const SectorManagerReservedMapIt& a, const SectorManagerReservedMapIt& b) const
+{
+    return SectorStartLengthSort()(a->first, b->first);
+}
+
 // A class to manage a contiguous group of sectors.
 // This class is not thread safe. The owner must handle synchronisation.
 class SectorManager {
 private:
     size_t _stop;
-    bool _resizable;
 
     // A list of free sectors ordered by start location
     std::set<Sector, SectorStartSort> _free_start;
 
     // A list of free sectors ordered by (length, start).
     //  This makes it easier to find the first sector large enough
-    std::set<Sector, SectorLenghtStartSort> _free_size;
+    std::set<Sector, SectorLengthStartSort> _free_size;
 
-    // A set of reserved sectors
-    std::set<Sector, SectorStartSort> _reserved;
+    // A map of reserved sectors to metadata.
+    SectorManagerReservedMap _reserved;
 
 public:
-    SectorManager(size_t start = 0, size_t stop = 0, bool resizable = true)
-        : _stop(stop)
-        , _resizable(resizable)
+    explicit SectorManager(size_t size = 0)
+        : _stop(size)
     {
-        if (stop < start) {
-            throw std::invalid_argument("stop must be at least start");
+        if (size) {
+            _free_start.emplace(0, size);
+            _free_size.emplace(0, size);
         }
-        _free_start.emplace(start, stop);
-        _free_size.emplace(start, stop);
-    };
+    }
 
+    SectorManager(const SectorManager&) = delete;
+    SectorManager& operator=(const SectorManager&) = delete;
+
+    // The state of moved from other is undefined.
+    SectorManager(SectorManager&&) = default;
+    SectorManager& operator=(SectorManager&&) = default;
+
+    // All free sectors ordered by start address
     const std::set<Sector, SectorStartSort>& sectors() const { return _free_start; }
 
+    // Reserve a sector of size length that does not intersect any reserved sectors.
     Sector reserve_space(size_t length);
+
+    // Reserve the requested sector.
+    // If the sector intersects a reserved sector, the intersection reserved twice.
     void reserve(const Sector& sector);
+
+    // Free the specified sector.
+    // The sector must have been previously reserved.
     void free(const Sector& sector);
 };
 
