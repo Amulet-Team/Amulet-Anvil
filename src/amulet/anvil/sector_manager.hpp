@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -130,6 +131,8 @@ public:
 
     SectorManager(const SectorManager&) = delete;
     SectorManager& operator=(const SectorManager&) = delete;
+
+    // The state of moved from other is undefined.
     SectorManager(SectorManager&&) = default;
     SectorManager& operator=(SectorManager&&) = default;
 
