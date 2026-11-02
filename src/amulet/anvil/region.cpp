@@ -204,6 +204,7 @@ public:
     void open_region_file() ASTD_REQUIRES_UNIQUE(mutex);
 
     // Create or open the region file if it is closed.
+    // If the file is already open, this resets the error flag.
     void create_open_region_file_if_closed() ASTD_REQUIRES_UNIQUE(mutex);
 
     void validate_coord(std::int64_t cx, std::int64_t cz) const;
@@ -331,10 +332,13 @@ void AnvilRegion::Impl::create_region_file()
 
 void AnvilRegion::Impl::open_region_file()
 {
+    // Open the region file in read and write mode.
     regionf.open(path, std::ios::in | std::ios::out | std::ios::binary);
     if (!regionf) {
         throw std::runtime_error("Could not open file " + path.string());
     }
+
+    // Find the length of the file
     if (!regionf.seekp(0, std::ios::end)) {
         regionf.close();
         throw std::runtime_error("Failed seeking to end of region file " + path.string());
@@ -345,6 +349,8 @@ void AnvilRegion::Impl::open_region_file()
         throw std::runtime_error("Failed getting size of region file " + path.string());
     }
     size_t file_size = static_cast<size_t>(pos);
+
+    // Fix the file length.
     if (file_size < SectorSize * 2) {
         // if the length of the region file is less than 8KiB extend it to 8KiB
         if (!regionf.write(EmptyHeader.data(), EmptyHeader.size() - file_size)) {
