@@ -978,39 +978,48 @@ void AnvilRegion::Impl::compact()
         return;
     }
 
-    // Sort by start position.
-    struct SectorStartSort {
-        bool operator()(
-            const std::tuple<size_t, std::pair<std::int64_t, std::int64_t>, Sector>& a,
-            const std::tuple<size_t, std::pair<std::int64_t, std::int64_t>, Sector>& b) const
-        {
-            return std::get<2>(a).start < std::get<2>(b).start;
-        }
-    };
+    size_t file_size = std::filesystem::file_size(path);
+    create_open_region_file_if_closed();
 
-    // Generate a list of sectors in sequential order
-    // location header index, chunk coordinate, sector
-    std::set<
-        std::tuple<size_t, std::pair<std::int64_t, std::int64_t>, Sector>,
-        SectorStartSort>
-        chunk_sectors;
-    for (const auto& [coord, sector] : chunk_locations) {
-        chunk_sectors.emplace(
-            4 * (coord.first - rx * 32 + (coord.second - rz * 32) * 32),
-            std::make_pair(coord.first, coord.second),
-            sector);
+    // Generate a map of sectors in sequential order to chunk coordinates
+    std::map<Sector, std::vector<std::pair<std::int64_t, std::int64_t>>, SectorStartLengthSort> chunk_sectors;
+    for (auto chunk_it = chunk_locations.begin(); chunk_it != chunk_locations.end();) {
+        const auto& [coord, sector] = *chunk_it;
+        if (sector.stop > file_size) {
+            // The sector is invalid. Remove it.
+            Amulet::error("Resetting invalid chunk header is invalid for cx=" + std::to_string(coord.first) + " cz=" + std::to_string(coord.second));
+            try {
+                set_header(coord.first, coord.second, 0);
+            } catch (...) {
+                _close();
+                _clear();
+                throw;
+            }
+            sector_manager->free(sector);
+            chunk_it = chunk_locations.erase(chunk_it);
+            continue;
+        }
+
+        auto& coords = chunk_sectors[sector];
+        coords.emplace_back(coord);
+        chunk_it++;
+    }
+
+    if (chunk_locations.empty()) {
+        // No chunks in the region file. Delete it.
+        _close_if_open();
+        _clear();
+        std::filesystem::remove(path);
+        return;
     }
 
     // Set the position to the end of the header
     size_t file_position = 2 * SectorSize;
-    size_t file_end = std::get<2>(*chunk_sectors.rbegin()).stop;
-
-    create_open_region_file_if_closed();
 
     try {
         while (!chunk_sectors.empty()) {
             // While there are remaining sectors, get the first sector.
-            const auto [header_index, chunk_coordinate, sector] = *chunk_sectors.begin();
+            const auto [sector, coords] = *chunk_sectors.begin();
             chunk_sectors.erase(chunk_sectors.begin());
 
             if (file_position == sector.start) {
@@ -1023,13 +1032,13 @@ void AnvilRegion::Impl::compact()
                     // There is enough space before the sector to fit the whole sector.
                     // Copy it to the new location
                     new_sector = Sector(file_position, file_position + sector.length());
+                    sector_manager->reserve(new_sector, coords.size());
                     file_position = new_sector.stop;
                 } else {
-                    // There is space before the sector but not enough to fit the sector.
+                    // There is not enough space before the sector to fit the sector.
                     // Move it to the end for processing later.
-                    new_sector = Sector(file_end, file_end + sector.length());
-                    file_end = new_sector.stop;
-                    chunk_sectors.emplace(header_index, chunk_coordinate, new_sector);
+                    new_sector = sector_manager->reserve_space(sector.length(), coords.size());
+                    chunk_sectors.emplace(new_sector, coords);
                 }
 
                 // Read in the data
@@ -1041,28 +1050,38 @@ void AnvilRegion::Impl::compact()
                     throw std::runtime_error("Failed reading data from region file " + path.string());
                 }
 
-                // Reserve and write the data to the new sector
-                sector_manager->reserve(new_sector);
+                // Write the data to the new sector
                 if (!regionf.seekp(new_sector.start)) {
                     throw std::runtime_error("Failed seeking to new sector in region file " + path.string());
                 }
                 if (!regionf.write(data.data(), data.size())) {
                     throw std::runtime_error("Failed writing data to region file " + path.string());
                 }
+                if (!regionf.flush()) {
+                    throw std::runtime_error("Failed flushing region file " + path.string());
+                }
 
-                // Update the index
+                // Update the indexes
                 std::uint32_t location = static_cast<std::uint32_t>((new_sector.start >> 4) + (new_sector.length() >> 12));
                 big_endian_swap(location);
-                if (!regionf.seekp(header_index)) {
-                    throw std::runtime_error("Failed seeking to header index in region file " + path.string());
+                for (const auto& coord : coords) {
+                    size_t header_index = 4 * (coord.first - rx * 32 + (coord.second - rz * 32) * 32);
+                    if (!regionf.seekp(header_index)) {
+                        throw std::runtime_error("Failed seeking to header index in region file " + path.string());
+                    }
+                    if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
+                        throw std::runtime_error("Failed writing location to region file " + path.string());
+                    }
                 }
-                if (!regionf.write(reinterpret_cast<char*>(&location), 4)) {
-                    throw std::runtime_error("Failed writing location to region file " + path.string());
+                if (!regionf.flush()) {
+                    throw std::runtime_error("Failed flushing region file " + path.string());
                 }
 
                 // Update internal state
-                chunk_locations[chunk_coordinate] = new_sector;
-                sector_manager->free(sector);
+                for (const auto& coord : coords) {
+                    chunk_locations[coord] = new_sector;
+                }
+                sector_manager->free(sector, coords.size());
             }
         }
         if (!regionf.flush()) {

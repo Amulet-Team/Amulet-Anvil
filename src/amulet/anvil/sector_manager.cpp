@@ -48,10 +48,13 @@ std::vector<Sector> Sector::split(const Sector& other) const
     return sectors;
 }
 
-Sector SectorManager::reserve_space(size_t length)
+Sector SectorManager::reserve_space(size_t length, size_t count)
 {
     if (length == 0) {
-        throw std::invalid_argument("Cannot reserve a sector with zero length.");
+        return Sector { 0, 0 };
+    }
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
     }
     auto it = _free_size.lower_bound(Sector(0, length));
     if (it != _free_size.end()) {
@@ -67,7 +70,7 @@ Sector SectorManager::reserve_space(size_t length)
             _free_size.emplace_hint(it, sector.stop, free_sector.stop);
             _free_start.emplace(sector.stop, free_sector.stop);
         }
-        _reserved.emplace(sector, ReservedSector { });
+        _reserved.emplace(sector, ReservedSector { count });
         return sector;
     } else {
         size_t start = _stop;
@@ -82,18 +85,21 @@ Sector SectorManager::reserve_space(size_t length)
         // Resize to fit
         Sector sector(start, start + length);
         _stop = sector.stop;
-        _reserved.emplace(sector, ReservedSector { });
+        _reserved.emplace(sector, ReservedSector { count });
         return sector;
     }
 }
 
-void SectorManager::reserve(const Sector& sector)
+void SectorManager::reserve(const Sector& sector, size_t count)
 {
     if (sector.stop < sector.start) {
         throw std::invalid_argument("stop must be at least start");
     }
     if (sector.length() == 0) {
         return; // Nothing to do.
+    }
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
     }
 
     // Find the sector greater than or equal to this sector
@@ -103,7 +109,7 @@ void SectorManager::reserve(const Sector& sector)
     if (new_reserved_it != _reserved.end() && new_reserved_it->first == sector) {
         // This sector is already reserved.
         // Increase its use count and return.
-        new_reserved_it->second.count += 1;
+        new_reserved_it->second.count += count;
         return;
     }
 
@@ -209,7 +215,7 @@ void SectorManager::reserve(const Sector& sector)
     }
 
     // Reserve the sector.
-    new_reserved_it = _reserved.emplace_hint(new_reserved_it, sector, ReservedSector { });
+    new_reserved_it = _reserved.emplace_hint(new_reserved_it, sector, ReservedSector { count });
 
     // Add the new sector to all the intersecting sectors.
     for (auto it : intersecting_sectors) {
@@ -220,13 +226,16 @@ void SectorManager::reserve(const Sector& sector)
     new_reserved_it->second.intersecting_sectors = std::move(intersecting_sectors);
 }
 
-void SectorManager::free(const Sector& sector)
+void SectorManager::free(const Sector& sector, size_t count)
 {
     if (sector.stop < sector.start) {
         throw std::invalid_argument("stop must be at least start");
     }
     if (sector.length() == 0) {
         return; // Nothing to do.
+    }
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
     }
 
     // Find the sector
@@ -237,8 +246,11 @@ void SectorManager::free(const Sector& sector)
 
     auto& sector_metadata = reserved_it->second;
 
-    // Free one use of this sector.
-    sector_metadata.count -= 1;
+    // Free count uses of this sector.
+    if (sector_metadata.count < count) {
+        throw std::invalid_argument("Sector was not reserved enough times");
+    }
+    sector_metadata.count -= count;
 
     if (sector_metadata.count) {
         // This sector is still reserved.
