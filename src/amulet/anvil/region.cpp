@@ -616,24 +616,24 @@ NamedTag AnvilRegion::Impl::get_value(std::int64_t cx, std::int64_t cz)
 
     const auto& sector = it->second;
     if (!regionf.seekg(sector.start)) {
-        throw std::runtime_error("Failed seeking.");
+        throw std::runtime_error("Failed seeking to chunk cx=" + std::to_string(cx) + ", cz=" + std::to_string(cz));
     }
 
     // Read the size of the buffer.
     std::uint32_t buffer_size;
     if (!regionf.read(reinterpret_cast<char*>(&buffer_size), sizeof(std::uint32_t))) {
-        throw std::runtime_error("Failed reading size.");
+        throw std::runtime_error("Failed reading size of chunk cx=" + std::to_string(cx) + ", cz=" + std::to_string(cz));
     }
     big_endian_swap(buffer_size);
 
     if (buffer_size < 1 || buffer_size > MaxRegionSize || (buffer_size + 4) > sector.length()) {
-        throw std::runtime_error("Invalid buffer size " + std::to_string(buffer_size) + ".");
+        throw std::runtime_error("Invalid buffer size " + std::to_string(buffer_size) + " for chunk cx=" + std::to_string(cx) + ", cz=" + std::to_string(cz));
     }
 
     // Read the buffer.
     std::string buffer(buffer_size, 0);
     if (!regionf.read(buffer.data(), buffer_size)) {
-        throw std::runtime_error("Failed reading buffer.");
+        throw std::runtime_error("Failed reading buffer for chunk cx=" + std::to_string(cx) + ", cz=" + std::to_string(cz));
     }
 
     auto format_byte = static_cast<unsigned char>(buffer[0]);
