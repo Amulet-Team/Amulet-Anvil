@@ -36,7 +36,7 @@ class AnvilDimensionLayer:
     def compact(self) -> None:
         """
         Defragment the region files and remove unused region files.
-        External ReadWrite:SharedReadOnly lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     def delete_chunk(
@@ -188,7 +188,7 @@ class AnvilDimension:
     def compact(self) -> None:
         """
         Defragment the region files and remove unused region files.
-        External ReadWrite:SharedReadOnly lock required.
+        External ReadWrite:SharedReadWrite lock required.
         """
 
     def delete_chunk(

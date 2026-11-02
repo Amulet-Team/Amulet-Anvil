@@ -150,7 +150,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimensionLayer::compact,
         py::call_guard<py::gil_scoped_release>(),
         py::doc("Defragment the region files and remove unused region files.\n"
-                "External ReadWrite:SharedReadOnly lock required."));
+                "External ReadWrite:SharedReadWrite lock required."));
     AnvilDimensionLayer.def(
         "destroy",
         &Amulet::AnvilDimensionLayer::destroy,
@@ -286,7 +286,7 @@ py::module init_anvil_dimension(py::module m_parent)
         &Amulet::AnvilDimension::compact,
         py::call_guard<py::gil_scoped_release>(),
         py::doc("Defragment the region files and remove unused region files.\n"
-                "External ReadWrite:SharedReadOnly lock required."));
+                "External ReadWrite:SharedReadWrite lock required."));
     AnvilDimension.def(
         "destroy",
         &Amulet::AnvilDimension::destroy,
