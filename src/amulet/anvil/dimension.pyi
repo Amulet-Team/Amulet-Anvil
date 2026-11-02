@@ -256,7 +256,7 @@ class AnvilDimension:
         self,
         cx: typing.SupportsInt | typing.SupportsIndex,
         cz: typing.SupportsInt | typing.SupportsIndex,
-        data_layers: collections.abc.Iterable[tuple[str, amulet.nbt.NamedTag]],
+        data_layers: collections.abc.Iterable[tuple[str, amulet.nbt.NamedTag | None]],
     ) -> None:
         """
         Set the data for a chunk.

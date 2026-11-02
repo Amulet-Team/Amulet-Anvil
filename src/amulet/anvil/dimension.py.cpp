@@ -258,10 +258,10 @@ py::module init_anvil_dimension(py::module m_parent)
             Amulet::AnvilDimension& self,
             std::int64_t cx,
             std::int64_t cz,
-            Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, Amulet::NBT::NamedTag>> py_data_layers) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, self.get_mutex()) {
-            std::vector<std::pair<std::string, Amulet::NBT::NamedTag>> data_layers;
-            for (const auto& pair : py_data_layers) {
-                data_layers.push_back(pair);
+            Amulet::pybind11_extensions::collections::Iterable<std::pair<std::string, std::optional<Amulet::NBT::NamedTag>>> py_data_layers) ASTD_REQUIRES_COMPATIBLE(ReadWrite, SharedReadWrite, self.get_mutex()) {
+            std::vector<std::pair<std::string, std::optional<Amulet::NBT::NamedTag>>> data_layers;
+            for (const auto pair : py_data_layers) {
+                data_layers.emplace_back(std::move(pair));
             }
             {
                 py::gil_scoped_release nogil;
