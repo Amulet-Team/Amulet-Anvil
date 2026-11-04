@@ -987,7 +987,7 @@ void AnvilRegion::Impl::compact()
         const auto& [coord, sector] = *chunk_it;
         if (sector.stop > file_size) {
             // The sector is invalid. Remove it.
-            Amulet::error("Resetting invalid chunk header is invalid for cx=" + std::to_string(coord.first) + " cz=" + std::to_string(coord.second));
+            Amulet::error("Resetting invalid chunk header for cx=" + std::to_string(coord.first) + " cz=" + std::to_string(coord.second));
             try {
                 set_header(coord.first, coord.second, 0);
             } catch (...) {
