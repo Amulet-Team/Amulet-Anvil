@@ -978,8 +978,8 @@ void AnvilRegion::Impl::compact()
         return;
     }
 
-    size_t file_size = std::filesystem::file_size(path);
     create_open_region_file_if_closed();
+    size_t file_size = std::filesystem::file_size(path);
 
     // Generate a map of sectors in sequential order to chunk coordinates
     std::map<Sector, std::vector<std::pair<std::int64_t, std::int64_t>>, SectorStartLengthSort> chunk_sectors;
