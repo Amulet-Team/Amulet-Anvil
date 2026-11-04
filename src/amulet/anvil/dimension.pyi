@@ -75,7 +75,7 @@ class AnvilDimensionLayer:
         create: bool = False,
     ) -> amulet.anvil.region.AnvilRegion:
         """
-        Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.
+        Get an AnvilRegion instance from its coordinates. This must not be stored long-term.
         Will throw RegionDoesNotExist if create is false and the region does not exist.
         External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.
         External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion.

@@ -78,7 +78,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("rz"),
         py::arg("create") = false,
         py::call_guard<py::gil_scoped_release>(),
-        py::doc("Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.\n"
+        py::doc("Get an AnvilRegion instance from its coordinates. This must not be stored long-term.\n"
                 "Will throw RegionDoesNotExist if create is false and the region does not exist.\n"
                 "External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.\n"
                 "External ReadWrite:SharedReadWrite lock required if calling ReadWrite methods on AnvilRegion."));
