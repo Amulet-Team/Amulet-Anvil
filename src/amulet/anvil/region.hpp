@@ -2,17 +2,15 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
-#include <list>
 #include <map>
-#include <optional>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include <amulet/utils/mutex.hpp>
-#include <amulet/utils/threading/mutex.hpp>
+#include <amulet/utils/threading/ordered_mutex.hpp>
 #include <amulet/utils/threading/thread_safety.hpp>
 
 #include <amulet/nbt/tag/named_tag.hpp>

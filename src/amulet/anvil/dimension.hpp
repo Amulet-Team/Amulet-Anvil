@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
@@ -7,9 +8,12 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <amulet/utils/logging.hpp>
 #include <amulet/utils/threading/mutex.hpp>
