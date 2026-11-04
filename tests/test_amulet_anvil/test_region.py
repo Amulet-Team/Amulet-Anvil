@@ -411,11 +411,21 @@ class AnvilRegionTestCase(unittest.TestCase):
         """Test regions with intersecting chunk data."""
         with TemporaryDirectory() as tmpdir:
             with open(os.path.join(tmpdir, "r.0.0.mca"), "wb") as f:
-                f.write(b"\x00\x00\x00\x02" * 2)  # Position header 0-2
-                f.write(b"\x00\x00\x00\x04" * 2)  # Position header 0-4
-                f.write(b"\x00\x00\x03\x01" * 2)  # Position header 3-4
-                f.write(b"\x00\x00\x04\x02" * 2)  # Position header 4-6
-                f.write(b"\x00\x00\x00\x00" * (1024 - 8))  # Position header
+                f.write(
+                    b"\x00\x00\x00\x02" * 2
+                )  # Position header 0-2 (intersects header)
+                f.write(
+                    b"\x00\x00\x00\x04" * 2
+                )  # Position header 0-4 (intersects header)
+                f.write(b"\x00\x00\x03\x01" * 2)  # Position header 3-4 (chunk)
+                f.write(
+                    b"\x00\x00\x03\x02" * 2
+                )  # Position header 3-5 (chunk + padding)
+                f.write(
+                    b"\x00\x00\x03\x03" * 2
+                )  # Position header 3-6 (chunk + padding)
+                f.write(b"\x00\x00\x05\x02" * 2)  # Position header 5-7 (EOF)
+                f.write(b"\x00\x00\x00\x00" * (1024 - 12))  # Position header
                 f.write(b"\x00\x00\x00\x00" * 1024)  # Time header
                 f.write(b"\x00" * 4096)  # Padding 2-3
                 payload = b"\n\x00\x00\x01\x00\x02cx\xff\x01\x00\x02cz\xff\x00"
@@ -423,6 +433,7 @@ class AnvilRegionTestCase(unittest.TestCase):
                 f.write(b"\x03")  # Compression
                 f.write(payload)  # Payload
                 f.write(b"\x00" * (4096 - len(payload) - 5))  # Padding
+                f.write(b"\x00" * 8192)  # Padding 4-6
 
             region = AnvilRegion(tmpdir, 0, 0)
 
@@ -444,21 +455,37 @@ class AnvilRegionTestCase(unittest.TestCase):
                 self.assertEqual(-1, value.compound["cx"].py_int)
                 self.assertEqual(-1, value.compound["cz"].py_int)
 
+                value = region.get_value(6, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(7, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(8, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(9, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
                 if after:
                     with self.assertRaises(RegionEntryDoesNotExist):
-                        region.get_value(6, 0)
+                        region.get_value(10, 0)
                     with self.assertRaises(RegionEntryDoesNotExist):
-                        region.get_value(7, 0)
+                        region.get_value(11, 0)
                 else:
                     with self.assertRaises(RuntimeError):
-                        region.get_value(6, 0)
+                        region.get_value(10, 0)
                     with self.assertRaises(RuntimeError):
-                        region.get_value(7, 0)
+                        region.get_value(11, 0)
 
             try:
                 test(False)
                 region.compact()
-                self.assertEqual(4096 * 3, os.stat(region.path).st_size)
+                self.assertEqual(4096 * 8, os.stat(region.path).st_size)
                 test(True)
             finally:
                 del region
