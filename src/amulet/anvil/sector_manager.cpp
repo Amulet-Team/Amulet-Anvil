@@ -7,8 +7,6 @@
 
 namespace Amulet {
 
-NoValidSector::~NoValidSector() noexcept { }
-
 // Do the two sectors intersect each other.
 bool Sector::intersects(const Sector& other) const
 {
