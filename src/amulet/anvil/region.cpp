@@ -1019,31 +1019,33 @@ void AnvilRegion::Impl::compact()
     try {
         while (!chunk_sectors.empty()) {
             // While there are remaining sectors, get the first sector.
-            const auto [sector, coords] = *chunk_sectors.begin();
-            chunk_sectors.erase(chunk_sectors.begin());
+            auto node = chunk_sectors.extract(chunk_sectors.begin());
+            auto src_sector = node.key();
+            const auto& coords = node.mapped();
 
-            if (file_position == sector.start) {
+            if (file_position == src_sector.start) {
                 // There isn't any space before the sector. Do nothing.
-                file_position = sector.stop;
+                file_position = src_sector.stop;
             } else {
                 // There is space before the sector
                 Sector new_sector;
-                if (file_position + sector.length() <= sector.start) {
+                if (file_position + src_sector.length() <= src_sector.start) {
                     // There is enough space before the sector to fit the whole sector.
                     // Copy it to the new location
-                    new_sector = Sector(file_position, file_position + sector.length());
+                    new_sector = Sector(file_position, file_position + src_sector.length());
                     sector_manager->reserve(new_sector, coords.size());
                     file_position = new_sector.stop;
                 } else {
                     // There is not enough space before the sector to fit the sector.
                     // Move it to the end for processing later.
-                    new_sector = sector_manager->reserve_space(sector.length(), coords.size());
-                    chunk_sectors.emplace(new_sector, coords);
+                    new_sector = sector_manager->reserve_space(src_sector.length(), coords.size());
+                    node.key() = new_sector;
+                    chunk_sectors.insert(std::move(node));
                 }
 
                 // Read in the data
-                std::string data(sector.length(), 0);
-                if (!regionf.seekg(sector.start)) {
+                std::string data(src_sector.length(), 0);
+                if (!regionf.seekg(src_sector.start)) {
                     throw std::runtime_error("Failed seeking to data in region file " + path.string());
                 }
                 if (!regionf.read(data.data(), data.size())) {
@@ -1081,7 +1083,7 @@ void AnvilRegion::Impl::compact()
                 for (const auto& coord : coords) {
                     chunk_locations[coord] = new_sector;
                 }
-                sector_manager->free(sector, coords.size());
+                sector_manager->free(src_sector, coords.size());
             }
         }
         if (!regionf.flush()) {
