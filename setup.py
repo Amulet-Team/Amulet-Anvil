@@ -78,6 +78,7 @@ class CMakeBuild(BuildExt):
                     f"-Damulet_anvil_DIR={fix_path(anvil_src_dir)}",
                     f"-DAMULET_ANVIL_EXT_DIR={fix_path(ext_dir)}",
                     f"-DCMAKE_INSTALL_PREFIX=install",
+                    f"-DTHREAD_SAFETY_ANALYSIS={os.environ.get("THREAD_SAFETY_ANALYSIS", "OFF")}",
                     "-B",
                     tempdir,
                 ]

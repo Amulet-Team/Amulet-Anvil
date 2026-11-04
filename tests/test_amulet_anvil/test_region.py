@@ -7,8 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 from weakref import ref
 from threading import Thread, Condition
 import time
+from pathlib import Path
+import struct
 
-from amulet.nbt import NamedTag, CompoundTag, StringTag, ListTag
+from amulet.nbt import NamedTag, CompoundTag, StringTag, ListTag, ByteTag
 
 from amulet.anvil import AnvilRegion, RegionDoesNotExist, RegionEntryDoesNotExist
 import amulet.minecraft_worlds
@@ -64,7 +66,7 @@ class AnvilRegionTestCase(unittest.TestCase):
             region = AnvilRegion(tmpdir, 10, 20)
             self.assertEqual(10, region.rx)
             self.assertEqual(20, region.rz)
-            self.assertEqual(os.path.join(tmpdir, "r.10.20.mca"), region.path)
+            self.assertEqual(Path(tmpdir) / "r.10.20.mca", region.path)
 
     def test_lock(self) -> None:
         sleep_time = 1
@@ -305,6 +307,188 @@ class AnvilRegionTestCase(unittest.TestCase):
             value = NamedTag(CompoundTag(test=StringTag("test")), "test")
             region.set_value(0, 0, value)
             del region
+
+    def test_intersecting(self) -> None:
+        """Test regions with intersecting chunk data."""
+        with TemporaryDirectory() as tmpdir:
+            # Craft a region file with all chunks occupying the same space.
+            with open(os.path.join(tmpdir, "r.0.0.mca"), "wb") as f:
+                f.write(b"\x00\x00\x02\x01" * 1024)  # Position header
+                f.write(b"\x00\x00\x00\x00" * 1024)  # Time header
+                payload = b"\n\x00\x00\x01\x00\x02cx\xff\x01\x00\x02cz\xff\x00"
+                f.write(struct.pack(">I", len(payload) + 1))  # Length
+                f.write(b"\x03")  # Compression
+                f.write(payload)  # Payload
+                f.write(b"\x00" * (4096 - len(payload) - 5))  # Padding
+
+            region = AnvilRegion(tmpdir, 0, 0)
+
+            try:
+                for cx in range(32):
+                    for cz in range(32):
+                        value = region.get_value(cx, cz)
+                        self.assertEqual(-1, value.compound["cx"].py_int)
+                        self.assertEqual(-1, value.compound["cz"].py_int)
+
+                for cx1 in range(32):
+                    for cz1 in range(32):
+                        region.set_value(
+                            cx1,
+                            cz1,
+                            NamedTag(CompoundTag(cx=ByteTag(cx1), cz=ByteTag(cz1))),
+                        )
+                        for cx2 in range(32):
+                            for cz2 in range(32):
+                                value = region.get_value(cx2, cz2)
+                                if cx2 < cx1 or (cx2 == cx1 and cz2 <= cz1):
+                                    self.assertEqual(cx2, value.compound["cx"].py_int)
+                                    self.assertEqual(cz2, value.compound["cz"].py_int)
+                                else:
+                                    self.assertEqual(-1, value.compound["cx"].py_int)
+                                    self.assertEqual(-1, value.compound["cz"].py_int)
+
+                region.compact()
+                self.assertEqual(4096 * (2 + 32 * 32), os.stat(region.path).st_size)
+            finally:
+                del region
+
+    def test_intersecting_compact_1(self) -> None:
+        """Test regions with intersecting chunk data."""
+        with TemporaryDirectory() as tmpdir:
+            # Craft a region file with all chunks occupying the same space.
+            with open(os.path.join(tmpdir, "r.0.0.mca"), "wb") as f:
+                f.write(b"\x00\x00\x02\x01" * 1024)  # Position header
+                f.write(b"\x00\x00\x00\x00" * 1024)  # Time header
+                payload = b"\n\x00\x00\x01\x00\x02cx\xff\x01\x00\x02cz\xff\x00"
+                f.write(struct.pack(">I", len(payload) + 1))  # Length
+                f.write(b"\x03")  # Compression
+                f.write(payload)  # Payload
+                f.write(b"\x00" * (4096 - len(payload) - 5))  # Padding
+
+            region = AnvilRegion(tmpdir, 0, 0)
+
+            try:
+                region.compact()
+                self.assertEqual(4096 * 3, os.stat(region.path).st_size)
+
+                for cx in range(32):
+                    for cz in range(32):
+                        value = region.get_value(cx, cz)
+                        self.assertEqual(-1, value.compound["cx"].py_int)
+                        self.assertEqual(-1, value.compound["cz"].py_int)
+            finally:
+                del region
+
+    def test_intersecting_compact_2(self) -> None:
+        """Test regions with intersecting chunk data."""
+        with TemporaryDirectory() as tmpdir:
+            # Craft a region file with all chunks occupying the same space.
+            with open(os.path.join(tmpdir, "r.0.0.mca"), "wb") as f:
+                f.write(b"\x00\x00\x03\x01" * 1024)  # Position header
+                f.write(b"\x00\x00\x00\x00" * 1024)  # Time header
+                f.write(b"\x00" * 4096)  # Padding
+                payload = b"\n\x00\x00\x01\x00\x02cx\xff\x01\x00\x02cz\xff\x00"
+                f.write(struct.pack(">I", len(payload) + 1))  # Length
+                f.write(b"\x03")  # Compression
+                f.write(payload)  # Payload
+                f.write(b"\x00" * (4096 - len(payload) - 5))  # Padding
+
+            region = AnvilRegion(tmpdir, 0, 0)
+
+            try:
+                region.compact()
+                self.assertEqual(4096 * 3, os.stat(region.path).st_size)
+
+                for cx in range(32):
+                    for cz in range(32):
+                        value = region.get_value(cx, cz)
+                        self.assertEqual(-1, value.compound["cx"].py_int)
+                        self.assertEqual(-1, value.compound["cz"].py_int)
+            finally:
+                del region
+
+    def test_intersecting_compact_3(self) -> None:
+        """Test regions with intersecting chunk data."""
+        with TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "r.0.0.mca"), "wb") as f:
+                f.write(
+                    b"\x00\x00\x00\x02" * 2
+                )  # Position header 0-2 (intersects header)
+                f.write(
+                    b"\x00\x00\x00\x04" * 2
+                )  # Position header 0-4 (intersects header)
+                f.write(b"\x00\x00\x03\x01" * 2)  # Position header 3-4 (chunk)
+                f.write(
+                    b"\x00\x00\x03\x02" * 2
+                )  # Position header 3-5 (chunk + padding)
+                f.write(
+                    b"\x00\x00\x03\x03" * 2
+                )  # Position header 3-6 (chunk + padding)
+                f.write(b"\x00\x00\x05\x02" * 2)  # Position header 5-7 (EOF)
+                f.write(b"\x00\x00\x00\x00" * (1024 - 12))  # Position header
+                f.write(b"\x00\x00\x00\x00" * 1024)  # Time header
+                f.write(b"\x00" * 4096)  # Padding 2-3
+                payload = b"\n\x00\x00\x01\x00\x02cx\xff\x01\x00\x02cz\xff\x00"
+                f.write(struct.pack(">I", len(payload) + 1))  # Length
+                f.write(b"\x03")  # Compression
+                f.write(payload)  # Payload
+                f.write(b"\x00" * (4096 - len(payload) - 5))  # Padding
+                f.write(b"\x00" * 8192)  # Padding 4-6
+
+            region = AnvilRegion(tmpdir, 0, 0)
+
+            def test(after: bool) -> None:
+                with self.assertRaises(RegionEntryDoesNotExist):
+                    region.get_value(0, 0)
+                with self.assertRaises(RegionEntryDoesNotExist):
+                    region.get_value(1, 0)
+                with self.assertRaises(RegionEntryDoesNotExist):
+                    region.get_value(2, 0)
+                with self.assertRaises(RegionEntryDoesNotExist):
+                    region.get_value(3, 0)
+
+                value = region.get_value(4, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(5, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(6, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(7, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(8, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                value = region.get_value(9, 0)
+                self.assertEqual(-1, value.compound["cx"].py_int)
+                self.assertEqual(-1, value.compound["cz"].py_int)
+
+                if after:
+                    with self.assertRaises(RegionEntryDoesNotExist):
+                        region.get_value(10, 0)
+                    with self.assertRaises(RegionEntryDoesNotExist):
+                        region.get_value(11, 0)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        region.get_value(10, 0)
+                    with self.assertRaises(RuntimeError):
+                        region.get_value(11, 0)
+
+            try:
+                test(False)
+                region.compact()
+                self.assertEqual(4096 * 8, os.stat(region.path).st_size)
+                test(True)
+            finally:
+                del region
 
 
 if __name__ == "__main__":

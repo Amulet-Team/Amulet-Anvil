@@ -1,12 +1,11 @@
 #include "sector_manager.hpp"
+#include <iterator>
+#include <list>
 #include <set>
+#include <utility>
 #include <vector>
 
 namespace Amulet {
-
-NoValidSector::~NoValidSector() noexcept {}
-
-size_t Sector::length() const { return stop - start; }
 
 // Do the two sectors intersect each other.
 bool Sector::intersects(const Sector& other) const
@@ -23,7 +22,7 @@ bool Sector::contains(const Sector& other) const
 // Do the two sectors neighbour but not intersect.
 bool Sector::neighbours(const Sector& other) const
 {
-    return other.stop == start or stop == other.start;
+    return other.stop == start || stop == other.start;
 }
 
 // Split this sector around another sector.
@@ -47,12 +46,15 @@ std::vector<Sector> Sector::split(const Sector& other) const
     return sectors;
 }
 
-Sector SectorManager::reserve_space(size_t length)
+Sector SectorManager::reserve_space(size_t length, size_t count)
 {
     if (length == 0) {
-        throw std::invalid_argument("Cannot reserve a sector with zero length.");
+        return Sector { 0, 0 };
     }
-    auto it = _free_size.upper_bound(Sector(0, length));
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
+    }
+    auto it = _free_size.lower_bound(Sector(0, length));
     if (it != _free_size.end()) {
         // There exists a section large enough to fit the length
         Sector free_sector = *it;
@@ -66,102 +68,250 @@ Sector SectorManager::reserve_space(size_t length)
             _free_size.emplace_hint(it, sector.stop, free_sector.stop);
             _free_start.emplace(sector.stop, free_sector.stop);
         }
-        _reserved.emplace(sector);
+        _reserved.emplace(sector, ReservedSector { count });
         return sector;
-    } else if (_resizable) {
+    } else {
+        size_t start = _stop;
+        if (!_free_start.empty() && _free_start.rbegin()->stop == _stop) {
+            // The last sector is unreserved but not large enough to store the data.
+            // Extend the sector.
+            const auto old_sector = *_free_start.rbegin();
+            _free_start.erase(old_sector);
+            _free_size.erase(old_sector);
+            start = old_sector.start;
+        }
         // Resize to fit
-        Sector sector(_stop, _stop + length);
+        Sector sector(start, start + length);
         _stop = sector.stop;
-        _reserved.emplace(sector);
+        _reserved.emplace(sector, ReservedSector { count });
         return sector;
-    } else {
-        throw NoValidSector("There is not enough contiguous space to allocate the length.");
     }
-};
+}
 
-void SectorManager::reserve(const Sector& sector)
+void SectorManager::reserve(const Sector& sector, size_t count)
 {
+    if (sector.stop < sector.start) {
+        throw std::invalid_argument("stop must be at least start");
+    }
     if (sector.length() == 0) {
-        throw std::invalid_argument("Cannot reserve a sector with zero length.");
+        return; // Nothing to do.
     }
-    if (_stop <= sector.start && (_free_size.empty() || _free_size.rbegin()->stop != _stop)) {
-        // Sector starts beyond the end and the last sector is reserved.
-        if (_resizable) {
-            _free_start.emplace(_stop, sector.stop);
-            _free_size.emplace(_stop, sector.stop);
-            _stop = sector.stop;
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
+    }
+
+    // Find the sector greater than or equal to this sector
+    auto new_reserved_it = _reserved.lower_bound(sector);
+
+    // If the found sector is the sector we are looking for
+    if (new_reserved_it != _reserved.end() && new_reserved_it->first == sector) {
+        // This sector is already reserved.
+        // Increase its use count and return.
+        new_reserved_it->second.count += count;
+        return;
+    }
+
+    // Remove or extend free sectors
+    if (_stop < sector.start) {
+        // If this sector is past the end
+        // It cannot intersect any free sectors.
+        // We must extend the free sectors to the start of this sector.
+
+        // The start of the new sector.
+        size_t start;
+
+        if (!_free_start.empty() && _free_start.rbegin()->stop == _stop) {
+            // Last free sector is at the end. Merge the new sector with it.
+            auto free_it = std::prev(_free_start.end());
+
+            // Update the start to the start of the last free sector.
+            start = free_it->start;
+
+            // Erase the last sector
+            _free_size.erase(*free_it);
+            _free_start.erase(free_it);
         } else {
-            throw NoValidSector("The sector starts outside of the region.");
+            // New sector starts at the end of the file
+            start = _stop;
+        }
+
+        // Add the new sector.
+        _free_start.emplace(start, sector.start);
+        _free_size.emplace(start, sector.start);
+
+    } else {
+        // Remove intersecting free sectors
+
+        // Find the first free sector that starts at or before the sector.
+        auto free_it = _free_start.lower_bound(sector);
+        if (free_it != _free_start.end() && free_it->start == sector.start) {
+            // Found the correct sector
+        } else if (free_it != _free_start.begin()) {
+            // Seek to the previous value if this is not the beginning.
+            free_it--;
+        }
+
+        // Remove intersecting sectors.
+        // Iterate from the value at or before sector until the value after sector.
+        while (free_it != _free_start.end() && free_it->start < sector.stop) {
+            if (sector.intersects(*free_it)) {
+                // If the sector intersects
+
+                // Get the sectors that do not intersect
+                auto new_free_sectors = free_it->split(sector);
+
+                // Erase the old sector.
+                _free_size.erase(*free_it);
+                free_it = _free_start.erase(free_it);
+
+                // Add the new sectors.
+                _free_size.insert(new_free_sectors.begin(), new_free_sectors.end());
+                _free_start.insert(new_free_sectors.begin(), new_free_sectors.end());
+            } else {
+                // If it does not intersect, go to the next sector.
+                free_it++;
+            }
         }
     }
 
-    // Find the first sector that starts before or at the sector start.
-    auto it = _free_start.lower_bound(sector);
-    if (it != _free_start.end() && it->start == sector.start) {
-        // Found the correct sector
-    } else if (it != _free_start.begin()) {
-        // Seek to the previous value if this is not the beginning.
-        it--;
-    } else {
-        throw NoValidSector("No free sectors that start at or before the one being reserved.");
+    // Extend the stop to the end of the sector
+    if (_stop < sector.stop) {
+        _stop = sector.stop;
     }
 
-    Sector free_sector = *it;
-    if (sector.stop <= free_sector.stop) {
-        // The sector fits within the contained sector
-        // remove the contained sector
-        it = _free_start.erase(it);
-        _free_size.erase(free_sector);
-    } else if (free_sector.stop == _stop) {
-        if (_resizable) {
-            // The sector is the last one and the memory region is resizable
-            it = _free_start.erase(it);
-            _free_size.erase(free_sector);
-            free_sector = Sector(free_sector.start, sector.stop);
-            _stop = sector.stop;
-        } else {
-            throw NoValidSector("The sector is outside the defined region and the region is not resizable.");
+    std::set<SectorManagerReservedMap::iterator, SectorMapItStartLengthSort> intersecting_sectors;
+
+    auto reserved_it = new_reserved_it;
+
+    // Find intersections from prior sectors.
+    if (reserved_it != _reserved.begin()) {
+        // Go to the previous sector if there is one.
+        auto previous_reserved_it = std::prev(reserved_it);
+
+        // If it intersects the previous sector then add it.
+        if (sector.intersects(previous_reserved_it->first)) {
+            intersecting_sectors.emplace(previous_reserved_it);
         }
-    } else {
-        throw NoValidSector("The requested sector is not free to be reserved.");
+
+        // Check intersections with prior sectors
+        for (const auto& intersecting_reserved_it : previous_reserved_it->second.intersecting_sectors) {
+            if (intersecting_reserved_it == reserved_it) {
+                // Sector is beyond the start of the sector we are adding.
+                // These are checked below.
+                break;
+            }
+            if (sector.intersects(intersecting_reserved_it->first)) {
+                // Add the intersection
+                intersecting_sectors.emplace(intersecting_reserved_it);
+            }
+        }
     }
 
-    for (const auto& sec : free_sector.split(sector)) {
-        _free_start.emplace_hint(it, sec);
-        _free_size.emplace(sec);
+    // Find intersections with future sectors.
+    for (; reserved_it != _reserved.end() && reserved_it->first.start < sector.stop; reserved_it++) {
+        intersecting_sectors.emplace(reserved_it);
     }
-    _reserved.emplace(sector);
-};
 
-void SectorManager::free(const Sector& sector)
+    // Reserve the sector.
+    new_reserved_it = _reserved.emplace_hint(new_reserved_it, sector, ReservedSector { count });
+
+    // Add the new sector to all the intersecting sectors.
+    for (auto it : intersecting_sectors) {
+        it->second.intersecting_sectors.emplace(new_reserved_it);
+    }
+
+    // Move the intersecting sectors map
+    new_reserved_it->second.intersecting_sectors = std::move(intersecting_sectors);
+}
+
+void SectorManager::free(const Sector& sector, size_t count)
 {
+    if (sector.stop < sector.start) {
+        throw std::invalid_argument("stop must be at least start");
+    }
+    if (sector.length() == 0) {
+        return; // Nothing to do.
+    }
+    if (count == 0) {
+        throw std::invalid_argument("count must be at least 1");
+    }
+
+    // Find the sector
     auto reserved_it = _reserved.find(sector);
-    if (reserved_it == _reserved.end() || reserved_it->stop != sector.stop) {
+    if (reserved_it == _reserved.end()) {
         throw std::invalid_argument("Sector was not reserved");
     }
-    // remove the sector from the reserved storage
+
+    auto& sector_metadata = reserved_it->second;
+
+    // Free count uses of this sector.
+    if (sector_metadata.count < count) {
+        throw std::invalid_argument("Sector was not reserved enough times");
+    }
+    sector_metadata.count -= count;
+
+    if (sector_metadata.count) {
+        // This sector is still reserved.
+        return;
+    }
+
+    // Extract the sectors this sector intersects.
+    auto intersecting_sectors = std::move(sector_metadata.intersecting_sectors);
+
+    // Sectors that can be freed.
+    std::list<Sector> free_sectors { sector };
+
+    // Remove backlinks from all intersecting sectors.
+    for (const auto& intersecting_it : intersecting_sectors) {
+        // Remove this sector from the other sector's intersections
+        intersecting_it->second.intersecting_sectors.erase(reserved_it);
+
+        const auto& intersecting_sector = intersecting_it->first;
+
+        // We must subtract the intersections because they are still reserved.
+        for (auto free_it = free_sectors.begin(); free_it != free_sectors.end();) {
+            if (free_it->intersects(intersecting_sector)) {
+                // Split the sector
+                auto split_free_sections = free_it->split(intersecting_sector);
+                // Add the new sectors
+                free_sectors.insert(free_sectors.end(), split_free_sections.begin(), split_free_sections.end());
+                // Erase the old sector
+                free_it = free_sectors.erase(free_it);
+            } else {
+                free_it++;
+            }
+        }
+    }
+
+    // Remove the sector from the reserved storage.
     _reserved.erase(reserved_it);
 
-    // Find the first sector that starts before or at the sector start.
-    auto free_it = _free_start.upper_bound(sector);
+    // Add all the free sectors to the free containers.
+    for (const auto& free_sector : free_sectors) {
+        // Find the first sector that starts after this sector.
+        auto free_it = _free_start.upper_bound(free_sector);
 
-    Sector new_sector = sector;
-    if (free_it != _free_start.end() && free_it->start == new_sector.stop) {
-        // The next free sector starts at the end of the freed sector. Merge them.
-        new_sector.stop = free_it->stop;
-        _free_size.erase(*free_it);
-        free_it = _free_start.erase(free_it);
+        Sector new_sector = free_sector;
+        if (free_it != _free_start.end() && free_it->start == new_sector.stop) {
+            // The next free sector starts at the end of the freed sector. Merge them.
+            new_sector.stop = free_it->stop;
+            _free_size.erase(*free_it);
+            free_it = _free_start.erase(free_it);
+        }
+
+        if (free_it != _free_start.begin()) {
+            auto prev = std::prev(free_it);
+            if (prev->stop == new_sector.start) {
+                // The previous free sector ends at the start of the freed sector. Merge them.
+                new_sector.start = prev->start;
+                _free_size.erase(*prev);
+                _free_start.erase(prev);
+            }
+        }
+
+        _free_start.emplace_hint(free_it, new_sector);
+        _free_size.emplace(new_sector);
     }
-
-    if (free_it != _free_start.begin() && (--free_it)->stop == new_sector.start) {
-        // The previous free sector starts at the beginning of the freed sector. Merge them.
-        new_sector.start = free_it->start;
-        _free_size.erase(*free_it);
-        free_it = _free_start.erase(free_it);
-    }
-
-    _free_start.emplace_hint(free_it, new_sector);
-    _free_size.emplace(new_sector);
-};
+}
 
 } // namespace Amulet

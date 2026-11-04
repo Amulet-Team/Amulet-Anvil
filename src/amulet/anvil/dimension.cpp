@@ -1,5 +1,12 @@
 #include <algorithm>
+#include <list>
+#include <map>
 #include <mutex>
+#include <vector>
+
+#include <amulet/utils/threading/mutex.hpp>
+#include <amulet/utils/threading/shared_mutex.hpp>
+#include <amulet/utils/threading/thread_safety.hpp>
 
 #include "dimension.hpp"
 #include "region.hpp"
@@ -16,7 +23,7 @@ void AnvilRegionCoordIterator::seek_to_valid()
             }
             coord = parse_region_filename(it->path().filename().string());
             return;
-        } catch (std::invalid_argument) {
+        } catch (const std::invalid_argument&) {
             continue;
         }
     }
@@ -64,24 +71,17 @@ bool operator==(const AnvilRegionCoordIterator& lhs, const AnvilRegionCoordItera
 
 void AnvilChunkCoordIterator::seek_to_valid()
 {
-    std::shared_ptr<AnvilDimensionLayer> layer;
     for (; _region_it != AnvilRegionCoordIterator(); _region_it++) {
-        if (!layer) {
-            layer = _layer.lock();
-            if (!layer) {
-                throw std::runtime_error("layer attached to AnvilChunkCoordIterator has been destroyed.");
-            }
-        }
         const auto& [rx, rz] = *_region_it;
         std::shared_ptr<AnvilRegion> region;
         try {
-            region = layer->get_region(rx, rz);
-        } catch (RegionDoesNotExist) {
+            region = _layer->get_region(rx, rz);
+        } catch (const RegionDoesNotExist&) {
             continue;
         }
         OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
         _coords = region->get_coords();
-        _coord_it = _coords.begin();
+        _coord_index = 0;
         if (!_coords.empty()) {
             return;
         }
@@ -90,10 +90,10 @@ void AnvilChunkCoordIterator::seek_to_valid()
 
 void AnvilChunkCoordIterator::seek_to_next_valid()
 {
-    if (_coord_it != _coords.end()) {
-        _coord_it++;
+    if (_coord_index < _coords.size()) {
+        _coord_index++;
     }
-    if (_coord_it == _coords.end()) {
+    if (_coord_index >= _coords.size()) {
         if (_region_it == AnvilRegionCoordIterator()) {
             return;
         }
@@ -102,19 +102,24 @@ void AnvilChunkCoordIterator::seek_to_next_valid()
     }
 }
 
+Amulet::OrderedMutex& AnvilChunkCoordIterator::get_mutex()
+{
+    return _layer->get_mutex();
+}
+
 AnvilChunkCoordIterator::AnvilChunkCoordIterator() { }
 
-AnvilChunkCoordIterator::AnvilChunkCoordIterator(std::shared_ptr<class AnvilDimensionLayer> layer)
-    : _layer(std::move(layer))
-    , _region_it(layer->all_region_coords())
-    , _coord_it(_coords.end())
+AnvilChunkCoordIterator::AnvilChunkCoordIterator(const std::shared_ptr<AnvilDimensionLayer>& layer)
+    : _layer(layer ? layer : throw std::invalid_argument("layer must not be a nullptr"))
+    , _region_it(_layer->all_region_coords())
+    , _coord_index(0)
 {
     seek_to_valid();
 }
 
 std::pair<std::int64_t, std::int64_t> AnvilChunkCoordIterator::operator*() const
 {
-    return *_coord_it;
+    return _coords[_coord_index];
 }
 
 AnvilChunkCoordIterator& AnvilChunkCoordIterator::operator++()
@@ -130,7 +135,176 @@ void AnvilChunkCoordIterator::operator++(int)
 
 bool operator==(const AnvilChunkCoordIterator& lhs, const AnvilChunkCoordIterator& rhs)
 {
-    return lhs._region_it == AnvilRegionCoordIterator() && rhs._region_it == AnvilRegionCoordIterator();
+    if (lhs._region_it == AnvilRegionCoordIterator()) {
+        return rhs._region_it == AnvilRegionCoordIterator();
+    } else {
+        return (
+            lhs._region_it == rhs._region_it
+            && lhs._coords[lhs._coord_index] == rhs._coords[rhs._coord_index]);
+    }
+}
+
+class AnvilRegionStorage {
+public:
+    astd::mutex mutex;
+
+    bool destroyed ASTD_GUARDED_BY(mutex) = false;
+
+private:
+    struct Element;
+    struct StrongElement;
+
+    using LRUCache = std::list<StrongElement>;
+    using CoordToElement = std::map<std::pair<std::int64_t, std::int64_t>, Element>;
+
+    struct Element {
+        std::weak_ptr<Amulet::AnvilRegion> weak_region;
+        LRUCache::iterator lru_it;
+    };
+
+    struct StrongElement {
+        std::shared_ptr<Amulet::AnvilRegion> shared_region;
+        Element& element;
+    };
+
+    // Map from region coordinate to region weak ptr.
+    CoordToElement _coord_to_element ASTD_GUARDED_BY(mutex);
+
+    // LRU cache of regions
+    LRUCache _lru_cache ASTD_GUARDED_BY(mutex);
+
+public:
+    // Get the region from its coordinates. Also returns the region evicted from the cache. Either may be nullptr.
+    std::pair<std::shared_ptr<Amulet::AnvilRegion>, std::shared_ptr<Amulet::AnvilRegion>> get_region(std::int64_t rx, std::int64_t rz) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Add a new region. get_region must return a nullptr.
+    // Returns the AnvilRegion rejected from the cache which may be nullptr.
+    std::shared_ptr<Amulet::AnvilRegion> add_region(std::shared_ptr<Amulet::AnvilRegion>) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Remove the region.
+    void on_region_deleted(std::int64_t rx, std::int64_t rz) ASTD_REQUIRES_UNIQUE(mutex);
+
+    // Destroy all regions and clears data. Returns pointers to the regions so they can be deleted without the lock.
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> destroy() ASTD_REQUIRES_UNIQUE(mutex);
+};
+
+std::pair<std::shared_ptr<Amulet::AnvilRegion>, std::shared_ptr<Amulet::AnvilRegion>> AnvilRegionStorage::get_region(std::int64_t rx, std::int64_t rz)
+{
+    // Find the region Element.
+    const auto it = _coord_to_element.find(std::make_pair(rx, rz));
+    if (it != _coord_to_element.end()) {
+        // Element exists. Get region (may be nullptr)
+        auto& element = it->second;
+        auto region = element.weak_region.lock();
+        if (region) {
+            std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+            // If region exists, update LRU.
+            if (element.lru_it == _lru_cache.end()) {
+                // Not in LRU. Append.
+                _lru_cache.emplace_front(region, element);
+                element.lru_it = _lru_cache.begin();
+                if (_lru_cache.size() > 64) {
+                    // Limit LRU cache size.
+                    auto& evicted_element = _lru_cache.back();
+                    evicted_element.element.lru_it = _lru_cache.end();
+                    evicted_region = std::move(evicted_element.shared_region);
+                    _lru_cache.pop_back();
+                }
+            } else if (element.lru_it != _lru_cache.begin()) {
+                // Not the first element. Move to the front.
+                _lru_cache.splice(_lru_cache.begin(), _lru_cache, element.lru_it);
+            }
+            return { std::move(region), std::move(evicted_region) };
+        }
+    }
+    // Element does not exist.
+    return { nullptr, nullptr };
+}
+
+std::shared_ptr<Amulet::AnvilRegion> AnvilRegionStorage::add_region(std::shared_ptr<Amulet::AnvilRegion> region)
+{
+    auto coord = std::make_pair(region->rx(), region->rz());
+    auto& element = _coord_to_element[coord];
+    element.weak_region = region;
+    _lru_cache.emplace_front(region, element);
+    element.lru_it = _lru_cache.begin();
+
+    std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+    if (_lru_cache.size() > 64) {
+        // Limit LRU cache size.
+        auto& evicted_element = _lru_cache.back();
+        evicted_element.element.lru_it = _lru_cache.end();
+        evicted_region = std::move(evicted_element.shared_region);
+        _lru_cache.pop_back();
+    }
+    return evicted_region;
+}
+
+void AnvilRegionStorage::on_region_deleted(std::int64_t rx, std::int64_t rz)
+{
+    auto element_it = _coord_to_element.find({ rx, rz });
+    if (element_it != _coord_to_element.end() && element_it->second.weak_region.expired()) {
+        _coord_to_element.erase(element_it);
+    }
+}
+
+std::vector<std::shared_ptr<Amulet::AnvilRegion>> AnvilRegionStorage::destroy()
+{
+    // Find all regions that still exist.
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> regions;
+    for (auto& it : _coord_to_element) {
+        auto region_ptr = it.second.weak_region.lock();
+        if (region_ptr) {
+            regions.emplace_back(std::move(region_ptr));
+        }
+    }
+
+    destroyed = true;
+
+    // Clear memory
+    _coord_to_element.clear();
+    _lru_cache.clear();
+
+    // Destroy regions
+    for (auto& region_ptr : regions) {
+        auto& region = *region_ptr;
+        astd::lock_guard lock(region.get_mutex());
+        region.destroy();
+    }
+
+    // Return shared pointers so they can be deleted without the lock.
+    return regions;
+}
+
+// Subclass of AnvilRegion that unlinks itself upon deletion.
+class AnvilRegion2 : public AnvilRegion {
+    std::shared_ptr<AnvilRegionStorage> _shared;
+
+public:
+    AnvilRegion2(
+        std::shared_ptr<AnvilRegionStorage> shared,
+        const std::filesystem::path& directory,
+        std::int64_t rx, std::int64_t rz,
+        bool mcc);
+    ~AnvilRegion2() override;
+};
+
+AnvilRegion2::AnvilRegion2(
+    std::shared_ptr<AnvilRegionStorage> shared,
+    const std::filesystem::path& directory,
+    std::int64_t rx, std::int64_t rz,
+    bool mcc)
+    : AnvilRegion(directory, rx, rz, mcc)
+    , _shared(std::move(shared))
+{
+}
+
+AnvilRegion2::~AnvilRegion2()
+{
+    destroy();
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    shared.on_region_deleted(rx(), rz());
 }
 
 // AnvilDimensionLayer
@@ -139,6 +313,7 @@ AnvilDimensionLayer::AnvilDimensionLayer(
     std::filesystem::path directory, bool mcc)
     : _directory(directory)
     , _mcc(mcc)
+    , _shared(std::make_shared<AnvilRegionStorage>())
 {
     if (!std::filesystem::exists(_directory)) {
         std::filesystem::create_directories(_directory);
@@ -150,6 +325,21 @@ AnvilDimensionLayer::AnvilDimensionLayer(
 AnvilDimensionLayer::~AnvilDimensionLayer()
 {
     destroy();
+}
+
+bool AnvilDimensionLayer::is_valid_layer_name(const std::string& layer_name)
+{
+    if (layer_name.empty()) {
+        // Must contain at least one character
+        return false;
+    }
+    for (auto c : layer_name) {
+        if (!(('a' <= c && c <= 'z') || c == '_')) {
+            // All characters must be a-z or _
+            return false;
+        }
+    }
+    return true;
 }
 
 // Accessors
@@ -184,23 +374,30 @@ bool AnvilDimensionLayer::has_region_at_chunk(
 std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
     std::int64_t rx, std::int64_t rz, bool create)
 {
-    // Lock parallel modifications
-    // TODO: Some of this could be done in parallel.
-    std::lock_guard lock(_regions_mutex);
-    if (destroyed) {
-        throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
-    }
     // Get the region key
     auto key = std::make_pair(rx, rz);
+    auto& shared = *_shared;
+
+    // Defined before lock so it is destroyed after.
+    std::shared_ptr<Amulet::AnvilRegion> evicted_region;
+
+    astd::lock_guard lock(shared.mutex);
+    if (shared.destroyed) {
+        throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
+    }
+
     // Find the region
-    auto it = _regions.find(key);
-    if (it != _regions.end()) {
+    auto regions = shared.get_region(rx, rz);
+    std::shared_ptr<Amulet::AnvilRegion> region = std::move(std::get<0>(regions));
+    evicted_region = std::move(std::get<1>(regions));
+
+    if (region) {
         // Return if it already exists.
-        return it->second;
+        return region;
     } else if (create or has_region(rx, rz)) {
-        // Create the region class
-        auto emp = _regions.emplace(key, std::make_shared<AnvilRegion>(_directory, rx, rz, _mcc));
-        return emp.first->second;
+        region = std::make_shared<AnvilRegion2>(_shared, _directory, rx, rz, _mcc);
+        evicted_region = shared.add_region(region);
+        return region;
     } else {
         throw RegionDoesNotExist();
     }
@@ -209,15 +406,15 @@ std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region(
 std::shared_ptr<AnvilRegion> AnvilDimensionLayer::get_region_at_chunk(
     std::int64_t cx, std::int64_t cz, bool create)
 {
-    return get_region(cx >> 5, cx >> 5, create);
+    return get_region(cx >> 5, cz >> 5, create);
 }
 
 bool AnvilDimensionLayer::has_chunk(std::int64_t cx, std::int64_t cz)
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
-    } catch (RegionDoesNotExist) {
+        region = get_region_at_chunk(cx, cz);
+    } catch (const RegionDoesNotExist&) {
         return false;
     }
     OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -228,8 +425,8 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
-    } catch (RegionDoesNotExist) {
+        region = get_region_at_chunk(cx, cz);
+    } catch (const RegionDoesNotExist&) {
         throw RegionEntryDoesNotExist("Chunk " + std::to_string(cx) + ", " + std::to_string(cz) + " does not exist.");
     }
     OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -238,7 +435,7 @@ Amulet::NBT::NamedTag AnvilDimensionLayer::get_chunk_data(std::int64_t cx, std::
 
 void AnvilDimensionLayer::set_chunk_data(std::int64_t cx, std::int64_t cz, const Amulet::NBT::NamedTag& tag)
 {
-    auto region = get_region(cx >> 5, cz >> 5, true);
+    auto region = get_region_at_chunk(cx, cz, true);
     OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
     return region->set_value(cx, cz, tag);
 }
@@ -247,8 +444,8 @@ void AnvilDimensionLayer::delete_chunk(std::int64_t cx, std::int64_t cz)
 {
     std::shared_ptr<AnvilRegion> region;
     try {
-        region = get_region(cx >> 5, cz >> 5);
-    } catch (RegionDoesNotExist) {
+        region = get_region_at_chunk(cx, cz);
+    } catch (const RegionDoesNotExist&) {
         return;
     }
     OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
@@ -257,34 +454,37 @@ void AnvilDimensionLayer::delete_chunk(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimensionLayer::compact()
 {
-    // TODO: Threads
     // TODO: CancelManager
     for (auto it = all_region_coords(); it != AnvilRegionCoordIterator(); it++) {
-        auto [cx, cz] = *it;
-        auto region = get_region(cx, cz);
-        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region->get_mutex());
-        region->compact();
+        auto [rx, rz] = *it;
+        std::shared_ptr<AnvilRegion> region_ptr;
+        try {
+            region_ptr = get_region(rx, rz);
+        } catch (const RegionDoesNotExist&) {
+            continue;
+        }
+        auto& region = *region_ptr;
+        OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> region_lock(region.get_mutex());
+        region.compact();
     }
 }
 
 void AnvilDimensionLayer::destroy()
 {
-    std::lock_guard regions_lock(_regions_mutex);
-    destroyed = true;
+    std::vector<std::shared_ptr<Amulet::AnvilRegion>> evicted_regions;
 
-    // Destroy all region instances.
-    for (auto& it : _regions) {
-        auto& region = *it.second;
-        auto& mutex = region.get_mutex();
-        std::lock_guard region_lock(mutex);
-        region.destroy();
-    }
-    _regions.clear();
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    shared.destroyed = true;
+
+    evicted_regions = shared.destroy();
 }
 
 bool AnvilDimensionLayer::is_destroyed()
 {
-    return destroyed;
+    auto& shared = *_shared;
+    astd::lock_guard lock(shared.mutex);
+    return shared.destroyed;
 }
 
 Amulet::OrderedMutex& AnvilDimension::get_mutex() { return _public_mutex; }
@@ -295,13 +495,21 @@ bool AnvilDimension::mcc() const { return _mcc; }
 
 std::vector<std::string> AnvilDimension::layer_names()
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     std::vector<std::string> layers;
     layers.reserve(_layers.size());
     for (const auto& node : _layers) {
-        layers.push_back(node.first);
+        layers.emplace_back(node.first);
     }
     return layers;
+}
+
+AnvilDimension::AnvilDimension(AnvilDimensionDataTuple data, bool mcc)
+    : _directory(std::move(std::get<0>(data)))
+    , _mcc(mcc)
+    , _layers(std::move(std::get<1>(data)))
+    , _default_layer(std::move(std::get<2>(data)))
+{
 }
 
 AnvilDimension::~AnvilDimension()
@@ -311,28 +519,45 @@ AnvilDimension::~AnvilDimension()
 
 bool AnvilDimension::has_layer(const std::string& layer_name)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     return _layers.contains(layer_name);
 }
 
 std::shared_ptr<AnvilDimensionLayer> AnvilDimension::get_layer(const std::string& layer_name, bool create)
 {
-    std::shared_lock lock(_layers_mutex);
-    auto it = _layers.find(layer_name);
-    if (it != _layers.end()) {
-        return it->second;
-    }
-    if (create) {
+    {
+        astd::shared_lock lock(_mutex);
         if (destroyed) {
             throw std::runtime_error("This AnvilDimension instance has been destroyed.");
         }
-        return _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first->second;
+        auto it = _layers.find(layer_name);
+        if (it != _layers.end()) {
+            return it->second;
+        } else if (!create) {
+            throw std::invalid_argument("No layer exists with name " + layer_name);
+        }
     }
-    throw std::invalid_argument("No layer exists with name " + layer_name);
+    {
+        astd::lock_guard lock(_mutex);
+        if (destroyed) {
+            throw std::runtime_error("This AnvilDimension instance has been destroyed.");
+        }
+        // Find the layer
+        auto it = _layers.find(layer_name);
+        if (it == _layers.end()) {
+            if (!AnvilDimensionLayer::is_valid_layer_name(layer_name)) {
+                throw std::invalid_argument("Anvil layer " + layer_name + " contains characters not matching [_a-z]");
+            }
+            // Initialise it if it did not exist.
+            it = _layers.emplace(layer_name, std::make_shared<AnvilDimensionLayer>(_directory / layer_name, _mcc)).first;
+        }
+        return it->second;
+    }
 }
 
 AnvilChunkCoordIterator AnvilDimension::all_chunk_coords() const
 {
+    OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(_default_layer->get_mutex());
     return AnvilChunkCoordIterator(_default_layer);
 }
 
@@ -344,19 +569,19 @@ bool AnvilDimension::has_chunk(std::int64_t cx, std::int64_t cz) const
 
 JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     JavaRawChunk chunk_data;
     for (const auto& [layer_name, layer_ptr] : _layers) {
         auto& layer = *layer_ptr;
         OrderedLockGuard<ThreadAccessMode::Read, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
         try {
             chunk_data.emplace(layer_name, layer.get_chunk_data(cx, cz));
-        } catch (RegionEntryDoesNotExist) {
+        } catch (const RegionEntryDoesNotExist&) {
         }
     }
     if (chunk_data.empty()) {
         if (destroyed) {
-            throw std::runtime_error("This AnvilDimensionLayer instance has been destroyed.");
+            throw std::runtime_error("This AnvilDimension instance has been destroyed.");
         }
         throw RegionEntryDoesNotExist();
     }
@@ -365,7 +590,7 @@ JavaRawChunk AnvilDimension::get_chunk_data(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimension::delete_chunk(std::int64_t cx, std::int64_t cz)
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
         OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
@@ -375,7 +600,7 @@ void AnvilDimension::delete_chunk(std::int64_t cx, std::int64_t cz)
 
 void AnvilDimension::compact()
 {
-    std::shared_lock lock(_layers_mutex);
+    astd::shared_lock lock(_mutex);
     for (const auto& it : _layers) {
         auto& layer = *it.second;
         OrderedLockGuard<ThreadAccessMode::ReadWrite, ThreadShareMode::SharedReadWrite> layer_lock(layer.get_mutex());
@@ -385,14 +610,13 @@ void AnvilDimension::compact()
 
 void AnvilDimension::destroy()
 {
-    std::lock_guard layers_lock(_layers_mutex);
+    astd::lock_guard layers_lock(_mutex);
     destroyed = true;
 
     // Destroy all region instances.
     for (auto& it : _layers) {
         auto& layer = *it.second;
-        auto& mutex = layer.get_mutex();
-        std::lock_guard layer_lock(mutex);
+        astd::lock_guard layer_lock(layer.get_mutex());
         layer.destroy();
     }
     _layers.clear();
@@ -400,6 +624,7 @@ void AnvilDimension::destroy()
 
 bool AnvilDimension::is_destroyed()
 {
+    astd::shared_lock lock(_mutex);
     return destroyed;
 }
 

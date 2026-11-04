@@ -19,9 +19,6 @@ __all__: list[str] = [
     "dimension",
     "region",
 ]
-
-def _init() -> None: ...
-
 RawChunkType: typing.TypeAlias = dict[str, amulet.nbt.NamedTag]
 __version__: str
 compiler_config: dict

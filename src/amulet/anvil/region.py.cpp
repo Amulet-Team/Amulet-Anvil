@@ -1,5 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl/filesystem.h>
+
+#include <filesystem>
 
 #include "region.hpp"
 
@@ -11,20 +14,20 @@ py::module init_anvil_region(py::module m_parent)
 
     py::classh<Amulet::AnvilRegion>
         AnvilRegion(m, "AnvilRegion", py::release_gil_before_calling_cpp_dtor(),
-        "A class to read and write Minecraft Java Edition Region files.\n"
-        "Only one instance should exist per region file at any given time otherwise bad things may happen.\n"
-        "This class is internally thread safe but a public lock is provided to enable external synchronisation.\n"
-        "Upstream locks from the level must also be adhered to.");
+            "A class to read and write Minecraft Java Edition Region files.\n"
+            "Only one instance should exist per region file at any given time otherwise bad things may happen.\n"
+            "This class is internally thread safe but a public lock is provided to enable external synchronisation.\n"
+            "Upstream locks from the level must also be adhered to.");
 
     py::classh<Amulet::AnvilRegion::FileCloser>
-        FileCloser(AnvilRegion, "FileCloser",
+        FileCloser(AnvilRegion, "FileCloser", py::release_gil_before_calling_cpp_dtor(),
             "A class to manage closing the region file.\n"
             "When the instance is deleted the region file will be closed.\n"
             "The region file can be manually closed before this is deleted.");
 
     AnvilRegion.def(
         py::init(
-            [](std::string directory, std::string file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
+            [](std::filesystem::path directory, std::filesystem::path file_name, std::int64_t rx, std::int64_t rz, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(directory, file_name, rx, rz, mcc);
             }),
         py::arg("directory"),
@@ -35,7 +38,7 @@ py::module init_anvil_region(py::module m_parent)
         py::doc("Construct from the directory path, name of the file and region coordinates."));
     AnvilRegion.def(
         py::init(
-            [](std::string directory, std::int64_t rx, std::int64_t rz, bool mcc) {
+            [](std::filesystem::path directory, std::int64_t rx, std::int64_t rz, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(directory, rx, rz, mcc);
             }),
         py::arg("directory"),
@@ -46,7 +49,7 @@ py::module init_anvil_region(py::module m_parent)
                 "File name is computed from region coordinates."));
     AnvilRegion.def(
         py::init(
-            [](std::string path, bool mcc) {
+            [](std::filesystem::path path, bool mcc) {
                 return std::make_shared<Amulet::AnvilRegion>(path, mcc);
             }),
         py::arg("path"),
@@ -62,7 +65,7 @@ py::module init_anvil_region(py::module m_parent)
                 "Thread safe."));
     AnvilRegion.def_property_readonly(
         "path",
-        [](Amulet::AnvilRegion& self) -> std::string { return self.path().string(); },
+        &Amulet::AnvilRegion::path,
         py::doc("The path of the region file.\n"
                 "Thread safe."));
     AnvilRegion.def_property_readonly(
@@ -166,6 +169,7 @@ py::module init_anvil_region(py::module m_parent)
     AnvilRegion.def(
         "is_destroyed",
         &Amulet::AnvilRegion::is_destroyed,
+        py::call_guard<py::gil_scoped_release>(),
         py::doc("Has the instance been destroyed.\n"
                 "If this is false, other calls will fail.\n"
                 "External Read:SharedReadWrite lock required."));
