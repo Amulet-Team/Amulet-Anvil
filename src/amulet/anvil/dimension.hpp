@@ -179,7 +179,7 @@ private:
     AnvilRegionCoordIterator _region_it;
     using coordsT = std::vector<std::pair<std::int64_t, std::int64_t>>;
     coordsT _coords;
-    size_t _coord_index;
+    size_t _coord_index = 0;
 
     void seek_to_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
     void seek_to_next_valid() ASTD_REQUIRES_COMPATIBLE(Read, SharedReadWrite, _layer->get_mutex());
