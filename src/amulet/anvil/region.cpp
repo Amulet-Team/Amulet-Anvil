@@ -979,7 +979,18 @@ void AnvilRegion::Impl::compact()
     }
 
     create_open_region_file_if_closed();
-    size_t file_size = std::filesystem::file_size(path);
+
+    // Find the length of the file
+    if (!regionf.seekp(0, std::ios::end)) {
+        regionf.close();
+        throw std::runtime_error("Failed seeking to end of region file " + path.string());
+    }
+    auto pos = regionf.tellp();
+    if (pos == std::fstream::pos_type(-1)) {
+        regionf.close();
+        throw std::runtime_error("Failed getting size of region file " + path.string());
+    }
+    size_t file_size = static_cast<size_t>(pos);
 
     // Generate a map of sectors in sequential order to chunk coordinates
     std::map<Sector, std::vector<std::pair<std::int64_t, std::int64_t>>, SectorStartLengthSort> chunk_sectors;
