@@ -78,6 +78,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("rz"),
         py::arg("create") = false,
         py::call_guard<py::gil_scoped_release>(),
+        py::returns_non_null(),
         py::doc("Get an AnvilRegion instance from its coordinates. This must not be stored long-term.\n"
                 "Will throw RegionDoesNotExist if create is false and the region does not exist.\n"
                 "External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.\n"
@@ -89,6 +90,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("cz"),
         py::arg("create") = false,
         py::call_guard<py::gil_scoped_release>(),
+        py::returns_non_null(),
         py::doc("Get an AnvilRegion instance from chunk coordinates it contains. This must not be stored long-term.\n"
                 "Will throw RegionDoesNotExist if create is false and the region does not exist.\n"
                 "External Read:SharedReadWrite lock required if only calling Read methods on AnvilRegion.\n"
@@ -217,6 +219,7 @@ py::module init_anvil_dimension(py::module m_parent)
         py::arg("layer_name"),
         py::arg("create") = false,
         py::call_guard<py::gil_scoped_release>(),
+        py::returns_non_null(),
         py::doc("Get the AnvilDimensionLayer for a specific layer. The returned value must not be stored long-term.\n"
                 "If create=true the layer will be created if it doesn't exist.\n"
                 "External Read:SharedReadWrite lock required if only calling Read methods on AnvilDimensionLayer.\n"

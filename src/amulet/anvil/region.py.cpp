@@ -177,6 +177,7 @@ py::module init_anvil_region(py::module m_parent)
         "get_file_closer",
         &Amulet::AnvilRegion::get_file_closer,
         py::call_guard<py::gil_scoped_release>(),
+        py::returns_non_null(),
         py::doc("Get the object responsible for closing the region file.\n"
                 "When this object is deleted it will close the region file\n"
                 "This means that holding a reference to this will delay when the region file is closed.\n"
